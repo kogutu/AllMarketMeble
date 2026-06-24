@@ -1,0 +1,45 @@
+{
+  "name": "opony-allegro",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4501",
+    "build": "next build",
+    "deploy": "git add . && set /p comment=\"Podaj komentarz do commita: \" && git commit -m \"%comment%\" && git push -u origin main",
+    "start": "next start",
+    "lint": "next lint",
+    "db:migrate": "node scripts/migrate.js"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.51.1",
+    "ag-grid-community": "^35.3.1",
+    "ag-grid-react": "^35.3.1",
+    "axios": "^1.7.2",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "dotenv": "^17.4.1",
+    "lodash": "^4.17.21",
+    "mysql2": "^3.9.7",
+    "next": "14.2.5",
+    "openai": "^4.52.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-hook-form": "^7.52.1",
+    "react-hot-toast": "^2.4.1",
+    "typesense": "^1.8.2",
+    "xlsx": "^0.18.5",
+    "zustand": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.17.6",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
