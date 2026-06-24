@@ -723,10 +723,10 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
     existing: Record<string, string | string[]>,
     incoming: Record<string, string | string[]>
   ): Record<string, string | string[]> => {
-    const merged = { ...existing, ...incoming };
-    for (const eanId of EAN_PARAM_IDS) {
-      const existingVal = existing[eanId];
-      const incomingVal = incoming[eanId];
+  const merged = { ...existing, ...incoming };
+  for (const eanId of Array.from(EAN_PARAM_IDS)) {
+    const existingVal = existing[eanId];
+    const incomingVal = incoming[eanId];
       const existingFilled = existingVal && (Array.isArray(existingVal) ? existingVal.length > 0 : existingVal !== '' && existingVal !== EAN_PLACEHOLDER);
       const incomingEmpty = !incomingVal || (Array.isArray(incomingVal) ? incomingVal.length === 0 : incomingVal === '');
       if (existingFilled && incomingEmpty) {
