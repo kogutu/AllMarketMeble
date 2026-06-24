@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['oponymaster.eu'],
+    domains: ['mebel-partner.pl'],
     remotePatterns: [
       {
         protocol: 'https',

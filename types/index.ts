@@ -73,7 +73,7 @@ export interface MebleProduct {
   // ── Legacy (opony) — opcjonalne, używane jeszcze przez kod Allegro ─────────
   width?: string; profile?: string; diameter?: string; season?: string;
   load_index?: string; speed_index?: string; vehicle_class?: string;
-  size_raw?: string; production_year?: string; xl?: number; runflat?: number;
+  size_raw?: string; production_year?: string; xl?: number; runflat?: number; reinforced?: number;
   wet_grip?: string; rolling_resistance?: string; pattern?: string;
 }
 
