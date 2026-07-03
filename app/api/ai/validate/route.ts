@@ -5,7 +5,7 @@ import { AllegroFormData } from '@/types';
 
 export async function POST(req: NextRequest) {
   try {
-    const { productId, collection = 'tyres', formData, categoryParams } = await req.json();
+    const { productId, collection = process.env.TYPESENSE_COLLECTION_TYRES || 'meble', formData, categoryParams } = await req.json();
 
     if (!productId || !formData) {
       return NextResponse.json(

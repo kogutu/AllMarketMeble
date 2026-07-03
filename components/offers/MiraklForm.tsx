@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { MebleProduct, MiraklFormData } from '@/types';
+import SearchSelect from '@/components/ui/SearchSelect';
 
 interface Operator { id: string; name: string; }
 interface MiraklAccount { account_id: string; account_name: string; operator: string | null; }
@@ -402,38 +403,36 @@ export default function MiraklForm({ product }: { product: MebleProduct }) {
         <div className="space-y-3">
           <h4 className="text-xs font-semibold text-gray-500 uppercase">Atrybuty kategorii</h4>
           <div className="grid grid-cols-2 gap-3">
-            {attributes.map((a) => (
+            {attributes.map((a) => {
+              const val = (form.attributes[a.code] as string) || '';
+              const cls = `input${val ? ' is-filled' : ''}`;
+              return (
               <div key={a.code}>
                 <label className="label">
                   {a.label}{a.required && <span className="text-red-500"> *</span>}
                 </label>
                 {a.values && a.values.length > 0 ? (
-                  <select className="input"
-                    value={(form.attributes[a.code] as string) || ''}
-                    onChange={(e) => setAttr(a.code, e.target.value)}>
-                    <option value="">—</option>
-                    {a.values.map((v) => <option key={v.code} value={v.code}>{v.label}</option>)}
-                  </select>
+                  <SearchSelect className={cls} options={a.values}
+                    value={val}
+                    onChange={(code) => setAttr(a.code, code)} />
                 ) : a.type === 'MEDIA' ? (
                   <div className="flex items-center gap-2">
-                    {(() => {
-                      const url = (form.attributes[a.code] as string) || '';
-                      return url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={url} alt="" className="w-10 h-10 object-contain bg-gray-50 rounded border shrink-0" />
-                      ) : <div className="w-10 h-10 rounded border border-dashed border-gray-200 shrink-0" />;
-                    })()}
-                    <input className="input flex-1 text-xs" placeholder="URL zdjęcia"
-                      value={(form.attributes[a.code] as string) || ''}
+                    {val ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={val} alt="" className="w-10 h-10 object-contain bg-gray-50 rounded border shrink-0" />
+                    ) : <div className="w-10 h-10 rounded border border-dashed border-gray-200 shrink-0" />}
+                    <input className={`${cls} flex-1 text-xs`} placeholder="URL zdjęcia"
+                      value={val}
                       onChange={(e) => setAttr(a.code, e.target.value)} />
                   </div>
                 ) : (
-                  <input className="input"
-                    value={(form.attributes[a.code] as string) || ''}
+                  <input className={cls}
+                    value={val}
                     onChange={(e) => setAttr(a.code, e.target.value)} />
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

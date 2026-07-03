@@ -9,7 +9,7 @@ import { AllegroParamDef } from '@/lib/allegro';
 import ValidationPanel from './ValidationPanel';
 import DescriptionEditor from './DescriptionEditor';
 import ImageGalleryPicker from './ImageGalleryPicker';
-import CategoryTree from './CategoryTree';
+import CategoryAccordion from './CategoryAccordion';
 import CrudOverlay from '@/components/marketplace/crud/CrudOverlay';
 
 interface Props {
@@ -299,6 +299,19 @@ function parseCategoryMismatch(details: string | undefined): CategoryMismatch | 
   } catch {
     return null;
   }
+}
+
+/**
+ * Fraza do wyszukiwania kategorii Allegro dla MEBLI.
+ * Wcześniej budowana z wymiarów opony (width/profile/R diameter) — dla mebli dawało to śmieci
+ * i podpowiadało kategorie oponiarskie. Teraz korzystamy z nazwy/modelu/marki produktu.
+ */
+function furnitureSearchPhrase(product: TyreProduct): string {
+  const phrase = [product.name, product.model, product.brand]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  return phrase || product.kind || 'mebel';
 }
 
 // ─── Param pre-fill from product data ────────────────────────────────────────
@@ -597,8 +610,7 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
           setForm((prev) => ({ ...prev, categoryId: d.categoryId!, categoryName: d.categoryName!, params: {} }));
         } else {
           // AI failed — fall back to phrase-based suggestions for manual selection
-          const kind = product.kind || 'opona';
-          const phrase = `${kind} ${product.width}/${product.profile} R${product.diameter}`;
+          const phrase = furnitureSearchPhrase(product);
           return fetch(`/api/allegro/categories?phrase=${encodeURIComponent(phrase)}`)
             .then((r) => r.json())
             .then((cats) => setSuggestedCategories((cats.categories as { id: string; name: string }[]) || []));
@@ -606,8 +618,7 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
       })
       .catch(() => {
         // Network error — show phrase-based fallback
-        const kind = product.kind || 'opona';
-        const phrase = `${kind} ${product.width}/${product.profile} R${product.diameter}`;
+        const phrase = furnitureSearchPhrase(product);
         fetch(`/api/allegro/categories?phrase=${encodeURIComponent(phrase)}`)
           .then((r) => r.json())
           .then((cats) => setSuggestedCategories((cats.categories as { id: string; name: string }[]) || []))
@@ -1393,9 +1404,8 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
           {/* Kategoria */}
           <div className="card p-5 space-y-3">
             <h3 className="font-semibold text-gray-900 text-sm uppercase tracking-wide">Kategoria Allegro *</h3>
-            <CategoryTree
+            <CategoryAccordion
               value={form.categoryId}
-              valueName={form.categoryName}
               onChange={(id, name) => {
                 draftRestoredRef.current = false;
                 setForm((prev) => ({ ...prev, categoryId: id, categoryName: name, params: {} }));
@@ -1665,7 +1675,7 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
                 const isEmpty = !value || (Array.isArray(value) ? value.length === 0 : value === '');
                 const isInvalid = param.required && isEmpty;
                 return (
-                  <div key={param.id} className={clsx('rounded-lg p-2 -mx-2', isInvalid && 'bg-red-50 ring-1 ring-red-200')}>
+                  <div key={param.id} className={clsx('rounded-lg p-2 -mx-2', isInvalid ? 'bg-red-50 ring-1 ring-red-200' : !isEmpty && 'bg-emerald-50 ring-1 ring-emerald-200')}>
                     <label className="label flex items-center gap-1">
                       <span>{param.name}</span>
                       {param.required ? (

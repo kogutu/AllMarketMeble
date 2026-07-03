@@ -20,6 +20,7 @@ interface Row {
   price: number | null;
   quantity: number | null;
   created_at: string;
+  updated_at: string;
   _enrich: { allegro_offer_id: string; account_id: string } | null;
   live_status: string;
   quality: number | null;
@@ -44,7 +45,7 @@ function toRow(o: AllegroOffer, accountsMap: Record<number, AccountOfferRow[]>):
     status: o.status, marketplace: (o as { marketplace?: string }).marketplace || 'allegro',
     accounts_count: accs.length, allegro_offer_id: allegroId,
     price: o.price != null ? Number(o.price) : null, quantity: o.quantity ?? null,
-    created_at: o.created_at,
+    created_at: o.created_at, updated_at: o.updated_at,
     _enrich: allegroId ? { allegro_offer_id: allegroId, account_id: first?.account_id || o.account_id || '' } : null,
     live_status: '', quality: null, live_price: null, live_stock: null,
   };
@@ -118,7 +119,8 @@ export default function OffersPage() {
     { headerName: 'Jakość %', field: 'quality', width: 110, type: 'rightAligned', valueFormatter: (p) => p.value == null ? '' : `${Math.round(Number(p.value) * 100)}%` },
     { headerName: 'Live cena', field: 'live_price', width: 110, type: 'rightAligned' },
     { headerName: 'Live stan', field: 'live_stock', width: 100, type: 'rightAligned' },
-    { headerName: 'Utworzono', field: 'created_at', width: 160, valueFormatter: (p) => p.value ? new Date(p.value as string).toLocaleString('pl') : '' },
+    { headerName: 'Utworzono', field: 'created_at', width: 160, filter: 'agDateColumnFilter', valueFormatter: (p) => p.value ? new Date(p.value as string).toLocaleString('pl') : '' },
+    { headerName: 'Zmodyfikowano', field: 'updated_at', width: 170, sort: 'desc', sortIndex: 0, filter: 'agDateColumnFilter', valueFormatter: (p) => p.value ? new Date(p.value as string).toLocaleString('pl') : '' },
     {
       headerName: 'Akcje', field: 'id', width: 200, pinned: 'right', sortable: false, filter: false,
       cellRenderer: (p: ICellRendererParams<Row>) => {

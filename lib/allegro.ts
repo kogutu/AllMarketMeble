@@ -374,7 +374,7 @@ export async function searchAllegroCategories(phrase: string): Promise<unknown[]
   if (!token) throw new Error('Not authenticated');
 
   const api = allegroApi(token);
-  const response = await api.get('/matching-categories', { params: { phrase } });
+  const response = await api.get('/matching-categories', { params: { name: phrase } });
   const result = response.data.matchingCategories || [];
   cacheSet(key, result);
   return result;

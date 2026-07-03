@@ -1,5 +1,6 @@
 import { query } from '@/lib/db';
 import type { MiraklFormData, TyreProduct } from '@/types';
+import { operatorTemplate } from './operatorTemplates';
 
 /**
  * Builds Mirakl product and offer feed records from our internal product + form data,
@@ -62,14 +63,7 @@ export async function buildProductRecord(
   form: MiraklFormData
 ): Promise<Record<string, string>> {
   const map = await getAttributeMap(operator, form.categoryCode);
-
-  const record: Record<string, string> = {
-    'shop-sku': form.sku,
-    category: form.categoryCode,
-    'product-title': form.title,
-    description: form.description,
-  };
-  if (form.ean) record['ean'] = form.ean;
+  const record: Record<string, string> = {};
 
   // 1) attributes derived from mapping (source field or fixed value)
   for (const row of map) {
@@ -84,6 +78,27 @@ export async function buildProductRecord(
     record[code] = Array.isArray(val) ? val.join('|') : String(val);
   }
 
+  const tpl = operatorTemplate(operator);
+  if (tpl) {
+    // Rekord kluczowany WYŁĄCZNIE kodami szablonu XLSX danego operatora (Empik/BRW). Kategoria to
+    // atrybut o ścieżce (Empik STR_GOLD / BRW miraklCategory) — wypełniany jak inne atrybuty, brak
+    // kolumny `category`. Bazowe pola wpisujemy pod kody szablonu operatora, gdy AI ich nie ustawiło.
+    const f = tpl.fields;
+    // Numer katalogowy: preferuj EAN (bezpieczny, ≤13 znaków). Empik wymaga max 26 znaków
+    // (SKU-nazwy bywają dłuższe → błąd 2004), więc NADPISUJEMY i przycinamy do 26.
+    const catalogCode = String(form.ean || form.sku || '').slice(0, 26);
+    if (catalogCode) record[f.sku] = catalogCode;
+    if (!record[f.title]) record[f.title] = form.title || '';
+    if (!record[f.description]) record[f.description] = form.description || '';
+    if (!record[f.ean] && form.ean) record[f.ean] = form.ean;
+    return record;
+  }
+
+  // Pozostali operatorzy Mirakla — generyczne kolumny produktowe.
+  record['shop-sku'] = form.sku;
+  record['product-title'] = form.title;
+  record['description'] = form.description;
+  if (form.ean) record['ean'] = form.ean;
   return record;
 }
 

@@ -100,6 +100,24 @@ export async function POST(
       [params.id, offer.typesense_id, accountId, allegroOfferId]
     );
 
+    // Optymistycznie oznacz jako WYSTAWIONY (źródło „listed-ids" na stronie Produkty) — produkt
+    // podświetla się jako dodany od razu, bez ręcznej synchronizacji ofert.
+    const fd = formData as Record<string, unknown>;
+    await query(
+      `INSERT INTO marketplace_live_offers
+         (marketplace, ref, ean, typesense_id, active, price, quantity, title, account_id, raw_json, base_json, meta_json, synced_at)
+       VALUES ('allegro', ?, ?, ?, 1, ?, ?, ?, ?, '{}', NULL, '{}', NOW())
+       ON DUPLICATE KEY UPDATE
+         ean=VALUES(ean), typesense_id=VALUES(typesense_id), active=1,
+         price=VALUES(price), quantity=VALUES(quantity), title=VALUES(title),
+         account_id=VALUES(account_id), synced_at=NOW()`,
+      [
+        allegroOfferId, (fd.ean as string) || null, offer.typesense_id,
+        basePrice ?? null, fd.quantity != null ? Number(fd.quantity) : null,
+        (fd.title as string) || offer.title || null, accountId,
+      ]
+    ).catch((e) => logger.debug('marketplace_live_offers optimistic upsert failed', { err: String(e) }));
+
     const accountOffers = await query<{ account_id: string; allegro_offer_id: string; status: string }>(
       'SELECT account_id, allegro_offer_id, status FROM allegro_offer_accounts WHERE offer_id = ?',
       [params.id]

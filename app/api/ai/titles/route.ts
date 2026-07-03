@@ -4,7 +4,7 @@ import { generateAccountTitles } from '@/lib/openai';
 
 export async function POST(req: NextRequest) {
   try {
-    const { productId, collection = 'tyres', baseTitle, accounts } = await req.json();
+    const { productId, collection = process.env.TYPESENSE_COLLECTION_TYRES || 'meble', baseTitle, accounts } = await req.json();
 
     if (!productId || !baseTitle || !Array.isArray(accounts)) {
       return NextResponse.json({ error: 'productId, baseTitle and accounts are required' }, { status: 400 });

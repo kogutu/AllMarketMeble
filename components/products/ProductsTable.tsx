@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import toast from 'react-hot-toast';
+import clsx from 'clsx';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import DataGrid, { ImageCell } from '@/components/grid/DataGrid';
 import CategoryChips, { type CategoryOption } from '@/components/products/CategoryChips';
@@ -52,6 +55,24 @@ export default function ProductsTable() {
   const [loaded, setLoaded] = useState(0);
   const [total, setTotal] = useState(0);
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
+  // BULK — zaznaczanie wierszy do obróbki jako nazwana lista.
+  const [selRows, setSelRows] = useState<Row[]>([]);
+  const [bulkMarkets, setBulkMarkets] = useState<string[]>([]);
+  const [bulkName, setBulkName] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const submitBulk = async () => {
+    if (selRows.length === 0 || bulkMarkets.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/bulk-add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: selRows.map((r) => r.id), marketplaces: bulkMarkets, name: bulkName }),
+      });
+      const d = await res.json();
+      if (res.ok) { toast.success(`„${bulkName.trim() || 'Lista'}" — dodano ${d.added} do obróbki (w tle).`, { duration: 6000 }); setBulkName(''); }
+      else toast.error(d.error || 'Błąd dodawania do kolejki');
+    } finally { setBulkBusy(false); }
+  };
 
   // Category options derived from the loaded catalog (by `kind`), sorted by frequency.
   const categoryOptions = useMemo<CategoryOption[]>(() => {
@@ -211,9 +232,34 @@ export default function ProductsTable() {
         getRowId={(p) => p.data.id}
         loading={loading}
         pagination={false}
+        selectable
+        onSelectionChanged={setSelRows}
         exportName="produkty"
         viewKey="produkty-tabela"
-        toolbarLeft={<span className="text-xs text-gray-400">Badge: A=Allegro · E=Empik · B=BRW · K=Kaufland</span>}
+        toolbarLeft={
+          selRows.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Zaznaczono: {selRows.length}</span>
+              <input className="input w-40 text-sm" placeholder="Nazwa listy (np. krzesła)"
+                value={bulkName} onChange={(e) => setBulkName(e.target.value)} />
+              {MARKETPLACES.map((m) => {
+                const on = bulkMarkets.includes(m.slug);
+                return (
+                  <button key={m.slug} type="button"
+                    onClick={() => setBulkMarkets((prev) => on ? prev.filter((x) => x !== m.slug) : [...prev, m.slug])}
+                    className={clsx('px-3 py-1 rounded-full text-xs font-medium', on ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
+                    {m.name}
+                  </button>
+                );
+              })}
+              <button type="button" onClick={submitBulk} disabled={bulkBusy || bulkMarkets.length === 0}
+                className="btn-primary btn-sm disabled:opacity-50">
+                {bulkBusy ? '…' : `Dodaj do obróbki (${selRows.length})`}
+              </button>
+              <Link href="/bulk" className="text-sm text-allegro hover:underline">Dodawane →</Link>
+            </div>
+          ) : <span className="text-xs text-gray-400">Badge: A=Allegro · E=Empik · B=BRW · K=Kaufland · zaznacz wiersze, by dodać do obróbki</span>
+        }
       />
     </div>
   );

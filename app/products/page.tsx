@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import toast from 'react-hot-toast';
 import debounce from 'lodash/debounce';
 import clsx from 'clsx';
 import { MebleProduct } from '@/types';
@@ -49,6 +51,30 @@ export default function ProductsPage() {
 
   const [filteredProducts, setFilteredProducts] = useState<MebleProduct[]>([]);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  // BULK — zaznaczanie produktów do automatycznej obróbki (kolejka „Dodawane").
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkMarkets, setBulkMarkets] = useState<string[]>([]);
+  const [bulkName, setBulkName] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleSelect = (id: string) => setSelected((prev) => {
+    const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
+  const submitBulk = async () => {
+    if (selected.size === 0 || bulkMarkets.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/bulk-add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: Array.from(selected), marketplaces: bulkMarkets, name: bulkName }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success(`„${bulkName.trim() || 'Lista'}" — dodano ${d.added} do obróbki. Przetwarzanie w tle, podgląd w „Dodawane".`, { duration: 6000 });
+        setSelected(new Set()); setBulkName('');
+      }
+      else toast.error(d.error || 'Błąd dodawania do kolejki');
+    } finally { setBulkBusy(false); }
+  };
   // Category filter (raw Typesense `cats` values, e.g. "151_biurka").
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
@@ -361,18 +387,28 @@ export default function ProductsPage() {
               return { price, id: acc.account_id, name: acc.account_name };
             });
 
+            const isSel = selected.has(product.id);
             return (
-              <ProductCard
-                key={product.id}
-                offerStatus={productOfferStatus}
-                hasDraft={!!drafts[product.id]}
-                product={product}
-                onAddToAllegro={(p) => router.push(`/products/${p.id}/add-to-allegro`)}
-                onAddToMirakl={(p) => router.push(`/products/${p.id}/add-to-empik`)}
-                onAddToMarketplace={(slug, p) => router.push(`/products/${p.id}/add-to-${slug}`)}
-                priceAllegro={priceAllegro}
-                statuses={liveStatus[product.id]}
-              />
+              <div key={product.id} className="relative">
+                {/* Checkbox zaznaczenia do BULK-obróbki. */}
+                <label className={clsx(
+                  'absolute top-2 left-2 z-10 flex items-center justify-center w-7 h-7 rounded-md border cursor-pointer bg-white/90 shadow-sm',
+                  isSel ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-gray-300'
+                )} onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" className="sr-only" checked={isSel} onChange={() => toggleSelect(product.id)} />
+                  {isSel ? <span className="text-emerald-600 font-bold">✓</span> : null}
+                </label>
+                <ProductCard
+                  offerStatus={productOfferStatus}
+                  hasDraft={!!drafts[product.id]}
+                  product={product}
+                  onAddToAllegro={(p) => router.push(`/products/${p.id}/add-to-allegro`)}
+                  onAddToMirakl={(p) => router.push(`/products/${p.id}/add-to-empik`)}
+                  onAddToMarketplace={(slug, p) => router.push(`/products/${p.id}/add-to-${slug}`)}
+                  priceAllegro={priceAllegro}
+                  statuses={liveStatus[product.id]}
+                />
+              </div>
             );
           })}
         </div>
@@ -382,6 +418,33 @@ export default function ProductsPage() {
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       )}
       </>
+      )}
+
+      {/* Pasek BULK — pojawia się gdy zaznaczono produkty. */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl bg-white shadow-xl border border-gray-200">
+          <span className="text-sm font-medium text-gray-700">Zaznaczono: {selected.size}</span>
+          <input className="input w-40 text-sm" placeholder="Nazwa listy (np. krzesła)"
+            value={bulkName} onChange={(e) => setBulkName(e.target.value)} />
+          <div className="flex items-center gap-1">
+            {MARKETPLACES.map((m) => {
+              const on = bulkMarkets.includes(m.slug);
+              return (
+                <button key={m.slug}
+                  onClick={() => setBulkMarkets((prev) => on ? prev.filter((x) => x !== m.slug) : [...prev, m.slug])}
+                  className={clsx('px-3 py-1 rounded-full text-xs font-medium', on ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
+                  {m.name}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={submitBulk} disabled={bulkBusy || bulkMarkets.length === 0}
+            className="btn-primary btn-sm disabled:opacity-50">
+            {bulkBusy ? '…' : `Dodaj do obróbki (${selected.size})`}
+          </button>
+          <Link href="/bulk" className="text-sm text-allegro hover:underline">Dodawane →</Link>
+          <button onClick={() => setSelected(new Set())} className="text-gray-400 hover:text-gray-600 text-sm">Wyczyść</button>
+        </div>
       )}
     </div>
   );

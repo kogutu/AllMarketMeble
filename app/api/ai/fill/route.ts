@@ -5,7 +5,7 @@ import { AllegroParamDef } from '@/lib/allegro';
 
 export async function POST(req: NextRequest) {
   try {
-    const { productId, collection = 'tyres', categoryId, categoryName, categoryParams } = await req.json();
+    const { productId, collection = process.env.TYPESENSE_COLLECTION_TYRES || 'meble', categoryId, categoryName, categoryParams } = await req.json();
 
     if (!productId) {
       return NextResponse.json({ error: 'productId is required' }, { status: 400 });

@@ -42,12 +42,16 @@ interface Props<T> {
   viewKey?: string;
   /** Paginate (default) or use a single virtual-scroll list (false). */
   pagination?: boolean;
+  /** Enable row-selection checkboxes (multi). */
+  selectable?: boolean;
+  /** Called with the current set of selected rows whenever selection changes. */
+  onSelectionChanged?: (rows: T[]) => void;
 }
 
 export default function DataGrid<T>({
   rowData, columnDefs, getRowId, onCellValueChanged, loading,
   toolbarLeft, exportName = 'export', heightClass = 'h-[calc(100vh-150px)]', rowHeight, viewKey,
-  pagination = true,
+  pagination = true, selectable = false, onSelectionChanged,
 }: Props<T>) {
   const apiRef = useRef<GridApi<T> | null>(null);
   const [quick, setQuick] = useState('');
@@ -108,6 +112,8 @@ export default function DataGrid<T>({
           getRowId={getRowId ? (p) => getRowId({ data: p.data }) : undefined}
           onCellValueChanged={onCellValueChanged}
           onGridReady={onGridReady}
+          rowSelection={selectable ? { mode: 'multiRow' } : undefined}
+          onSelectionChanged={onSelectionChanged ? (e) => onSelectionChanged(e.api.getSelectedRows()) : undefined}
           loading={loading}
           rowHeight={rowHeight}
           suppressFieldDotNotation

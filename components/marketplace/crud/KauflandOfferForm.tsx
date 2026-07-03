@@ -66,6 +66,8 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
   const autoFillForRef = useRef('');
 
   const set = (patch: Partial<KForm>) => setForm((f) => ({ ...f, ...patch }));
+  // Klasa podświetlenia pola z wprowadzoną wartością.
+  const fc = (v: unknown) => (Array.isArray(v) ? v.length > 0 : v !== '' && v != null && v !== 0) ? ' is-filled' : '';
 
   // Load shipping groups + warehouses once (defaults to is_default).
   const loadOptions = async (categoryCode: string) => {
@@ -271,16 +273,16 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
         <div className="col-span-2">
           <label className="label">Tytuł / nota oferty</label>
           {aiBusy === 'fill' ? <Skel /> : (
-            <input className="input" value={form.title} onChange={(e) => set({ title: e.target.value })} />
+            <input className={`input${fc(form.title)}`} value={form.title} onChange={(e) => set({ title: e.target.value })} />
           )}
         </div>
         <div>
           <label className="label">SKU oferty (id_offer)</label>
-          <input className="input" value={form.sku} onChange={(e) => set({ sku: e.target.value })} />
+          <input className={`input${fc(form.sku)}`} value={form.sku} onChange={(e) => set({ sku: e.target.value })} />
         </div>
         <div>
           <label className="label">EAN <span className="text-red-500">*</span></label>
-          <input className="input" value={form.ean} onChange={(e) => set({ ean: e.target.value })} />
+          <input className={`input${fc(form.ean)}`} value={form.ean} onChange={(e) => set({ ean: e.target.value })} />
         </div>
         <div>
           <label className="label">Cena (zł)</label>
@@ -312,7 +314,7 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
         <div>
           <label className="label">Grupa wysyłki</label>
           {loadingOpts ? <Skel /> : (
-            <select className="input" value={form.id_shipping_group}
+            <select className={`input${fc(form.id_shipping_group)}`} value={form.id_shipping_group}
               onChange={(e) => set({ id_shipping_group: e.target.value === '' ? '' : parseInt(e.target.value) })}>
               <option value="">—</option>
               {shippingGroups.map((g) => <option key={g.id} value={g.id}>{g.name}{g.isDefault ? ' (domyślna)' : ''}</option>)}
@@ -322,7 +324,7 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
         <div>
           <label className="label">Magazyn</label>
           {loadingOpts ? <Skel /> : (
-            <select className="input" value={form.id_warehouse}
+            <select className={`input${fc(form.id_warehouse)}`} value={form.id_warehouse}
               onChange={(e) => set({ id_warehouse: e.target.value === '' ? '' : parseInt(e.target.value) })}>
               <option value="">—</option>
               {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}{w.isDefault ? ' (domyślny)' : ''}</option>)}

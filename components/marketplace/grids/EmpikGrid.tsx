@@ -72,6 +72,21 @@ export default function EmpikGrid() {
     try { localStorage.setItem(`mp-view:${SLUG}`, String(id)); } catch { /* quota */ }
   };
 
+  const [xmlBusy, setXmlBusy] = useState(false);
+  // Wyślij dane ofertowe z feedu XML wprost do Empik (import OF01).
+  const pushEmpikXml = async () => {
+    if (!confirm('Wysłać dane ofertowe z feedu XML do Empik?')) return;
+    setXmlBusy(true);
+    try {
+      const res = await fetch('/api/marketplace/empik-offers-xml', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const d = await res.json();
+      if (res.ok) toast.success(`Wysłano ${d.offers} ofert do Empik (import ${d.importId}).`);
+      else toast.error(d.error || 'Błąd wysyłki XML');
+    } catch (e) {
+      toast.error(`Błąd wysyłki XML: ${String(e)}`);
+    } finally { setXmlBusy(false); }
+  };
+
   useEffect(() => {
     fetch(`/api/marketplace/fields?slug=${SLUG}`).then((r) => r.json()).then((d) => setFields(d.fields || [])).catch(() => {});
     fetch(`/api/grid-views?slug=${SLUG}`).then((r) => r.json()).then((d) => {
@@ -243,6 +258,11 @@ export default function EmpikGrid() {
           : progress ? `Sync w tle ${progress.done}/${progress.total || '?'} (${pct}%)` : 'Aktualizuj z marketplace'}
       </button>
       <button className="btn-secondary btn-sm" onClick={loadFromDb} disabled={loading}>Odśwież</button>
+      <button className="btn-sm px-3 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60"
+        onClick={pushEmpikXml} disabled={xmlBusy}
+        title="Pobierz feed XML i wyślij dane ofertowe do Empik przez API">
+        {xmlBusy ? 'Wysyłam…' : 'Wyślij oferty XML → Empik'}
+      </button>
       <select className="input w-44 text-sm" value={String(selectedViewId)} onChange={(e) => selectView(e.target.value === '' ? '' : Number(e.target.value))}>
         <option value="">Widok: domyślny</option>
         {views.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}

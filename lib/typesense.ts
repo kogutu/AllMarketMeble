@@ -153,10 +153,16 @@ export async function searchProducts(
   if (sortBy) searchParams.sort_by = sortBy;
   if (facetBy) { searchParams.facet_by = facetBy; searchParams.max_facet_values = 250; }
 
-  const result = await client
-    .collections(collection)
-    .documents()
-    .search(searchParams as Parameters<typeof client.collections>[0]);
+  // Używamy multi_search (POST) zamiast documents().search() (GET) — filtry typu
+  // `id:[...]` z tysiącami ID przekraczają limit długości query string 4000 znaków w GET.
+  const multi = await client.multiSearch.perform(
+    { searches: [{ collection, ...searchParams } as Record<string, unknown>] } as Parameters<typeof client.multiSearch.perform>[0]
+  );
+  const result = (multi.results?.[0] ?? {}) as {
+    hits?: Array<{ document: Record<string, unknown> }>;
+    found?: number;
+    facet_counts?: Array<{ field_name: string; counts: { value: string; count: number }[] }>;
+  };
 
   const hits = ((result.hits || []) as Array<{ document: Record<string, unknown> }>).map(
     (hit) => normalizeMebleProduct(hit.document)

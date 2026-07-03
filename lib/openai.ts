@@ -21,6 +21,7 @@ export interface AllegroCategory {
   id: string;
   name: string;
   leaf?: boolean;
+  path?: string;   // pełna ścieżka, np. "Dom i Ogród/Meble/Przedpokój/Konsole"
 }
 
 export async function suggestCategoryWithAI(
@@ -31,16 +32,27 @@ export async function suggestCategoryWithAI(
   const client = getClient();
 
   const list = candidates
-    .map((c) => `id="${c.id}" name="${c.name}"${c.leaf ? ' [LIŚĆ]' : ''}`)
+    .map((c) => `id="${c.id}" name="${c.name}"${c.path ? ` ścieżka="${c.path}"` : ''}${c.leaf ? ' [LIŚĆ]' : ''}`)
     .join('\n');
 
-  const prompt = `Masz produkt (mebel): ${product.name}, model: ${product.model}, typ: ${product.kind || 'mebel'}, stan: ${product.condition}.
+  const sourcePath = product.breadcrumbs || (product.cats && product.cats.length ? product.cats.join(' / ') : '');
 
-Wybierz JEDNĄ najlepiej pasującą kategorię Allegro z poniższej listy. Preferuj kategorie-liście [LIŚĆ].
+  const prompt = `Dopasowujesz produkt MEBLOWY do drzewa kategorii Allegro.
 
+Produkt:
+- Nazwa: ${product.name}
+- Model: ${product.model}
+- Typ/kategoria sklepowa: ${product.kind || 'mebel'}${sourcePath ? `\n- Ścieżka kategorii w sklepie: ${sourcePath}` : ''}
+
+Lista kandydatów Allegro (wybierz dokładnie jeden, najlepiej pasujący semantycznie do produktu i jego ścieżki sklepowej):
 ${list}
 
-Zwróć TYLKO JSON: {"categoryId": "...", "categoryName": "..."}`;
+Zasady:
+- Wybierz WYŁĄCZNIE kategorię z powyższej listy (przepisz dokładnie jej id).
+- Preferuj kategorie-liście [LIŚĆ] (na nich można wystawiać oferty).
+- Kieruj się znaczeniem mebla i ścieżką sklepową, nie samym dopasowaniem słów.
+
+Zwróć TYLKO JSON: {"categoryId": "<id z listy>", "categoryName": "<name z listy>"}`;
 
 
   console.log(prompt);
@@ -55,7 +67,15 @@ Zwróć TYLKO JSON: {"categoryId": "...", "categoryName": "..."}`;
   try {
     const parsed = JSON.parse(response.choices[0]?.message?.content || '{}') as { categoryId?: string; categoryName?: string };
     if (!parsed.categoryId) return null;
-    return { categoryId: parsed.categoryId, categoryName: parsed.categoryName || '' };
+
+    // Model bywa, że zwraca nazwę zamiast numerycznego ID (np. "fotel") — to powoduje 404
+    // przy /api/allegro/categories/<id>. Akceptujemy tylko ID realnie istniejące na liście kandydatów.
+    const byId = candidates.find((c) => String(c.id) === String(parsed.categoryId));
+    const match = byId
+      ?? candidates.find((c) => c.name.toLowerCase() === (parsed.categoryName || '').toLowerCase())
+      ?? candidates.find((c) => c.name.toLowerCase() === String(parsed.categoryId).toLowerCase());
+    if (!match) return null;
+    return { categoryId: String(match.id), categoryName: match.name };
   } catch {
     return null;
   }

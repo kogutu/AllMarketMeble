@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 4501",
+    "dev": "next dev -p 4500",
     "build": "next build",
     "deploy": "git add . && set /p comment=\"Podaj komentarz do commita: \" && git commit -m \"%comment%\" && git push -u origin main",
     "start": "next start",

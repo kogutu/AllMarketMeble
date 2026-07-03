@@ -64,29 +64,18 @@ export interface MiraklFillResult {
   attributes: Record<string, string | string[]>;
 }
 
-/**
- * Fill a Mirakl offer form (title, description, category attribute values) from product data.
- * For LIST attributes the AI must return value-list codes; for text attributes, plain strings.
- */
-export async function fillMiraklForm(
-  product: MebleProduct,
-  categoryLabel: string,
-  attributes: MarketplaceAttribute[]
-): Promise<MiraklFillResult> {
-  const DICT_LIMIT = 40;
-  const attrList = attributes
-    .map((a) => {
-      const vals = a.values?.length
-        ? `\n     Dozwolone wartości (code="label"): ${a.values.slice(0, DICT_LIMIT).map((v) => `${v.code}="${v.label}"`).join(', ')}${a.values.length > DICT_LIMIT ? ` … (${a.values.length})` : ''}`
-        : '';
-      return `  - code="${a.code}" label="${a.label}" type=${a.type}${a.required ? ' [WYMAGANY]' : ''}${a.multiple ? ' [MULTI]' : ''}${vals}`;
-    })
-    .join('\n');
+/** Normalize for tolerant matching (lowercase, strip diacritics + non-alphanumerics). */
+function norm(s: string): string {
+  return (s || '').toLowerCase()
+    .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l')
+    .replace(/ń/g, 'n').replace(/ó/g, 'o').replace(/ś/g, 's').replace(/[źż]/g, 'z')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
 
+/** Compact product record shared by the title and attribute prompts. */
+function productRecord(product: MebleProduct) {
   const gallery = product.gallery_images?.length ? product.gallery_images : (product.img ? [product.img] : []);
-
-  // Send a rich (but trimmed) record so AI can answer globally, including image assignment.
-  const record = {
+  return {
     name: product.name,
     subtitle: product.subtitle,
     model: product.model,
@@ -98,19 +87,86 @@ export async function fillMiraklForm(
     attrs: product.attrs,
     gallery_images: gallery,
   };
+}
 
-  const prompt = `Na podstawie pełnego rekordu mebla wypełnij ofertę dla Empik (Mirakl), kategoria: "${categoryLabel}".
-Najpierw skorzystaj z nazwy produktu, potem z atrybutów i opisu. Dopasowuj wartości 1:1; przy wątpliwości pomiń atrybut (chyba że [WYMAGANY]). Zwróć TYLKO JSON.
+/**
+ * Lokalne podpowiedzi dla atrybutów LIST: jeśli któraś z dozwolonych wartości pasuje do danych
+ * produktu (kolor, atrybuty, nazwa), podajemy jej code jako mocną sugestię. Dzięki temu AI nie
+ * gubi atrybutów typu „Kolor", których właściwa wartość bywa daleko poza widoczną częścią listy.
+ */
+function localAttributeHints(product: MebleProduct, attributes: MarketplaceAttribute[]): Record<string, string[]> {
+  const haystackTokens = new Set<string>();
+  const push = (s?: string) => { for (const t of norm(s || '').split(' ')) if (t.length >= 3) haystackTokens.add(t); };
+  push(product.color?.name);
+  push(product.name);
+  for (const v of Object.values(product.attrs || {})) push(String(v));
+
+  const hints: Record<string, string[]> = {};
+  for (const a of attributes) {
+    if (!a.values?.length) continue;
+    const matched: string[] = [];
+    for (const v of a.values) {
+      const vt = norm(v.label).split(' ').filter((t) => t.length >= 3);
+      if (vt.length && vt.every((t) => haystackTokens.has(t))) matched.push(v.code);
+    }
+    if (matched.length) hints[a.code] = a.multiple ? matched : [matched[0]];
+  }
+  return hints;
+}
+
+/** Tytuł oferty Empik — osobna, wyspecjalizowana funkcja (nie miesza się z parametrami). */
+export async function generateMiraklTitle(product: MebleProduct, categoryLabel: string): Promise<string> {
+  const prompt = `Ułóż zwięzły, sprzedażowy tytuł oferty MEBLA na Empik (kategoria: "${categoryLabel}"), max 130 znaków.
+Bazuj na nazwie i kluczowych cechach. Bez ceny, wysyłki, znaków specjalnych i CAPS-LOCK.
+
+Dane: ${JSON.stringify({ name: product.name, model: product.model, color: product.color?.name, attrs: product.attrs })}
+
+Zwróć TYLKO JSON: {"title": "..."}`;
+  const parsed = parseJson<{ title?: string }>(await ask(prompt, 200));
+  return (parsed?.title || product.name).slice(0, 130);
+}
+
+/** Parametry (atrybuty kategorii) + opis — osobna funkcja, skupiona wyłącznie na wypełnieniu pól. */
+export async function fillMiraklAttributes(
+  product: MebleProduct,
+  categoryLabel: string,
+  attributes: MarketplaceAttribute[]
+): Promise<{ description: string; attributes: Record<string, string | string[]> }> {
+  const hints = localAttributeHints(product, attributes);
+
+  // Limit listowanych wartości — pełne dumpy (150×62 atrybuty) przekraczały limit TPM (429).
+  // Lokalne dopasowania (hints) i tak wymuszają kluczowe wartości (kolor/materiał), więc do promptu
+  // wysyłamy mniejszą próbkę: zawsze wpis dopasowany + do DICT_LIMIT pozostałych.
+  const DICT_LIMIT = 40;
+  const sampleValues = (a: MarketplaceAttribute): string => {
+    if (!a.values?.length) return '';
+    const hinted = new Set(hints[a.code] || []);
+    const ordered = [
+      ...a.values.filter((v) => hinted.has(v.code)),
+      ...a.values.filter((v) => !hinted.has(v.code)),
+    ].slice(0, DICT_LIMIT);
+    return `\n     Dozwolone wartości (code="label"): ${ordered.map((v) => `${v.code}="${v.label}"`).join(', ')}${a.values.length > ordered.length ? ` … (${a.values.length})` : ''}`;
+  };
+  const attrList = attributes
+    .map((a) => `  - code="${a.code}" label="${a.label}" type=${a.type}${a.required ? ' [WYMAGANY]' : ''}${a.multiple ? ' [MULTI]' : ''}${sampleValues(a)}`)
+    .join('\n');
+
+  const hintsBlock = Object.keys(hints).length
+    ? `\nWstępnie dopasowane wartości (użyj ich, o ile pasują): ${JSON.stringify(hints)}`
+    : '';
+
+  const prompt = `Na podstawie pełnego rekordu mebla wypełnij ATRYBUTY oferty dla Empik (Mirakl), kategoria: "${categoryLabel}".
+Wypełnij MAKSYMALNIE dużo atrybutów (kolor, materiał, wymiary, styl itd.) — korzystaj z nazwy, koloru, atrybutów i opisu. Dopasowuj 1:1. Zwróć TYLKO JSON.
 
 Pełny rekord produktu (JSON):
-${JSON.stringify(record, null, 2)}
+${JSON.stringify(productRecord(product), null, 2)}
+${hintsBlock}
 
 Atrybuty kategorii do wypełnienia:
 ${attrList || '  (brak atrybutów)'}
 
 Zwróć JSON:
 {
-  "title": "tytuł oferty (zwięzły, do 130 znaków)",
   "description": "opis HTML (dozwolone: <p>,<ul>,<li>,<b>) — bez ceny i wysyłki",
   "attributes": { "<code atrybutu>": "<wartość lub code wartości; tablica dla [MULTI]>" }
 }
@@ -119,15 +175,34 @@ Zasady:
 - Dla type=LIST/LIST_MULTIPLE_VALUES: użyj DOKŁADNIE code z listy dozwolonych wartości (nie etykiety).
 - Dla [MULTI]: wartość = tablica code.
 - Dla type tekstowych/liczbowych: zwykły string.
-- Dla type=MEDIA: wstaw URL zdjęcia z gallery_images. Zdjęcie główne/okładki = gallery_images[0];
-  kolejne "Dodatkowe zdjęcia (n)" = gallery_images[n] po kolei. Atrybutów certyfikatów/GPSR (np. AGHL) NIE wypełniaj zdjęciami produktu.
-- Uwzględnij WSZYSTKIE atrybuty [WYMAGANY], których wartość da się ustalić.
-- Pomiń atrybuty, których nie da się określić (poza wymaganymi).`;
+- Dla type=MEDIA: wstaw URL zdjęcia z gallery_images. Główne = gallery_images[0]; kolejne
+  "Dodatkowe zdjęcia (n)" = gallery_images[n] po kolei. Atrybutów certyfikatów/GPSR (np. AGHL) NIE wypełniaj zdjęciami.
+- Wypełnij KAŻDY atrybut, dla którego da się ustalić wartość (zwłaszcza kolor i materiał). Pomiń tylko te naprawdę nieokreślone (poza [WYMAGANY]).`;
 
-  const parsed = parseJson<MiraklFillResult>(await ask(prompt, 1500));
-  return {
-    title: parsed?.title || product.name,
-    description: parsed?.description || product.description || '',
-    attributes: parsed?.attributes || {},
-  };
+  const parsed = parseJson<{ description?: string; attributes?: Record<string, string | string[]> }>(await ask(prompt, 3000));
+  const attrs = parsed?.attributes || {};
+  // Bezpiecznik: doklej lokalne dopasowania, których AI nie zwróciło.
+  for (const [code, vals] of Object.entries(hints)) {
+    if (attrs[code] == null || attrs[code] === '') {
+      const a = attributes.find((x) => x.code === code);
+      attrs[code] = a?.multiple ? vals : vals[0];
+    }
+  }
+  return { description: parsed?.description || product.description || '', attributes: attrs };
+}
+
+/**
+ * Fill a Mirakl offer form (title, description, category attribute values) from product data.
+ * Kompozycja osobnych funkcji: tytuł + (opis & parametry) liczone równolegle.
+ */
+export async function fillMiraklForm(
+  product: MebleProduct,
+  categoryLabel: string,
+  attributes: MarketplaceAttribute[]
+): Promise<MiraklFillResult> {
+  const [title, filled] = await Promise.all([
+    generateMiraklTitle(product, categoryLabel),
+    fillMiraklAttributes(product, categoryLabel, attributes),
+  ]);
+  return { title, description: filled.description, attributes: filled.attributes };
 }

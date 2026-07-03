@@ -95,6 +95,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
        adapter.kind === 'mirakl' ? 'pending' : 'active']
     );
 
+    // Optymistycznie oznacz produkt jako WYSTAWIONY w marketplace_live_offers (źródło „listed-ids"
+    // na stronie Produkty) — dzięki temu podświetla się jako dodany OD RAZU, bez ręcznej synchronizacji.
+    // Ewentualna korekta (np. odrzucony import Mirakla) nastąpi przy najbliższej synchronizacji.
+    const fd = formData as Record<string, unknown>;
+    const slug = adapter.kind === 'mirakl'
+      ? String(fd.operator || 'empik')
+      : adapter.kind === 'kaufland' ? 'kaufland' : 'allegro';
+    await query(
+      `INSERT INTO marketplace_live_offers
+         (marketplace, ref, ean, typesense_id, active, price, quantity, title, account_id, raw_json, base_json, meta_json, synced_at)
+       VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, '{}', NULL, '{}', NOW())
+       ON DUPLICATE KEY UPDATE
+         ean=VALUES(ean), typesense_id=VALUES(typesense_id), active=1,
+         price=VALUES(price), quantity=VALUES(quantity), title=VALUES(title),
+         account_id=VALUES(account_id), synced_at=NOW()`,
+      [
+        slug, outcome.ref, (fd.ean as string) || null, offer.typesense_id,
+        basePrice ?? (fd.price != null ? Number(fd.price) : null),
+        fd.quantity != null ? Number(fd.quantity) : null,
+        (fd.title as string) || offer.title || null, accountId,
+      ]
+    ).catch((e) => logger.debug('marketplace_live_offers optimistic upsert failed', { err: String(e) }));
+
     return NextResponse.json({ success: true, marketplace: adapter.kind, ref: outcome.ref, outcome });
   } catch (error) {
     console.error('Marketplace publish error:', error);

@@ -1,6 +1,7 @@
 import { MiraklClient } from './client';
 import { buildProductRecord, buildOfferRecord, findMissingAttributes } from './feed';
 import { getStaticValues } from './staticValueLists';
+import { operatorTemplate } from './operatorTemplates';
 import type {
   MarketplaceAdapter,
   MarketplaceCategory,
@@ -106,12 +107,54 @@ export class MiraklAdapter implements MarketplaceAdapter, LiveOffersAdapter {
     );
   }
 
+  /**
+   * Dla atrybutów typu LIST dopasowuje wysyłane wartości DOKŁADNIE do dozwolonej listy. Naprawia
+   * trzy klasy błędów importu 2006 „… is not in the possible values set":
+   *   1) różnice formatu/diakrytyków/wielkości liter (np. „bezowy"→„beżowy", „plyta-laminowana"→
+   *      „płyta laminowana", „Szary"→„szary"),
+   *   2) zły separator wielu wartości — wewnętrznie sklejamy `|`, ale Mirakl oczekuje przecinka
+   *      (np. „37296|37298|187254" → „37296,37298,187254"),
+   *   3) wiele wartości w atrybucie POJEDYNCZYM (np. „Kolor główny: czarny|beżowy") — zostawiamy
+   *      tylko pierwszą dopasowaną.
+   * Wartości spoza listy są usuwane; jeśli wymagane — ujawnią się jako brak atrybutu.
+   */
+  private sanitizeValueLists(attrs: MarketplaceAttribute[], record: Record<string, string>): void {
+    const tpl = operatorTemplate(this.operator);
+    const useLabel = tpl?.valueFormat === 'label';   // BRW oczekuje etykiet, Empik kodów
+    const sep = tpl?.multiSep ?? ',';
+    // lowercase + usuń diakrytyki + traktuj -/_ jak spację + zwiń spacje
+    const norm = (s: string) => s.toLowerCase()
+      .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l')
+      .replace(/ń/g, 'n').replace(/ó/g, 'o').replace(/ś/g, 's').replace(/[źż]/g, 'z')
+      .replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    for (const a of attrs) {
+      if (!a.values?.length) continue;
+      const raw = record[a.code];
+      if (raw == null || raw === '') continue;
+      // Mapa: dokładny code / znormalizowany code / znormalizowana etykieta → wpis listy.
+      const byExact = new Map(a.values.map((v) => [v.code, v]));
+      const byNorm = new Map<string, typeof a.values[number]>();
+      for (const v of a.values) { byNorm.set(norm(v.code), v); byNorm.set(norm(v.label), v); }
+      const out = (v: typeof a.values[number]) => (useLabel ? v.label : v.code);
+      const fixed: string[] = [];
+      // Rozdzielamy tylko po `|` (nasz wewnętrzny separator z buildProductRecord).
+      for (const part of String(raw).split('|').map((s) => s.trim()).filter(Boolean)) {
+        const v = byExact.get(part) ?? byNorm.get(norm(part));
+        if (v) { const val = out(v); if (!fixed.includes(val)) fixed.push(val); }
+      }
+      if (fixed.length === 0) { delete record[a.code]; continue; }
+      // Atrybut pojedynczy → jedna wartość; wielokrotny → wartości rozdzielone separatorem operatora.
+      record[a.code] = a.multiple ? fixed.join(sep) : fixed[0];
+    }
+  }
+
   async publish(draft: OfferDraft): Promise<PublishOutcome> {
     const form = draft.formData as unknown as MiraklFormData;
 
     // Validate required attributes before submitting (clear error instead of a rejected import).
     const attrs = await this.getCategoryAttributes(form.categoryCode);
     const productRecord = await buildProductRecord(this.operator, draft.product ?? null, form);
+    this.sanitizeValueLists(attrs, productRecord);
     const missing = findMissingAttributes(
       attrs.map((a) => ({ code: a.code, required: a.required })),
       productRecord

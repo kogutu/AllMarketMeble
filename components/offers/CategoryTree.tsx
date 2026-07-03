@@ -14,7 +14,11 @@ interface Props {
   onChange: (id: string, name: string) => void;
 }
 
-const ROOT_PARENT_ID = '257687';
+// Korzeń drzewa kategorii Allegro.
+// '' = prawdziwy korzeń (kategorie najwyższego poziomu) — branżowo-niezależny.
+// Aby wystartować od konkretnej gałęzi (np. Meble), ustaw NEXT_PUBLIC_ALLEGRO_ROOT_CATEGORY.
+// (Poprzednio zaszyte '257687' = „Opony i felgi" — pozostałość po starej branży oponiarskiej.)
+const ROOT_PARENT_ID = process.env.NEXT_PUBLIC_ALLEGRO_ROOT_CATEGORY ?? '';
 
 export default function CategoryTree({ value, valueName, onChange }: Props) {
   // Stack of levels: each level is { parentId, items[] }
@@ -93,7 +97,7 @@ export default function CategoryTree({ value, valueName, onChange }: Props) {
       <div className="flex gap-2">
         <input
           className="input text-sm flex-1 font-mono"
-          placeholder="Wpisz ID kategorii np. 257695"
+          placeholder="Wpisz ID kategorii Allegro"
           value={idSearch}
           onChange={(e) => { setIdSearch(e.target.value); setIdSearchError(null); }}
           onKeyDown={(e) => e.key === 'Enter' && handleIdSearch()}

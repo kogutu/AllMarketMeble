@@ -23,8 +23,35 @@ interface CompareItem {
   state: string;
   market: { price: number | null; quantity: number | null };
   base: { typesense_id: string; name: string; img: string; sku: string; ean: string; price: number | null; qty: number | null } | null;
-  meta?: { ean?: string | null; stateCode?: string; leadtime?: number; logisticClass?: string };
+  meta?: { ean?: string | null; stateCode?: string; leadtime?: number; logisticClass?: string; date?: string | null };
   fields: Record<string, string | number | boolean>;
+}
+
+/**
+ * Live oferty z API marketplace nie zawierają daty wystawienia/modyfikacji, więc datę bierzemy
+ * z naszej bazy publikacji (allegro_offers.updated_at) po `ref` (= allegro_offer_id / shop_sku).
+ * Zwraca mapę ref → ISO data modyfikacji.
+ */
+async function offerDatesByRef(refs: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const uniq = Array.from(new Set(refs.filter(Boolean)));
+  if (uniq.length === 0) return map;
+  const ph = uniq.map(() => '?').join(',');
+  const rows = await query<{ ref: string; updated_at: string }>(
+    `SELECT oa.allegro_offer_id AS ref, MAX(o.updated_at) AS updated_at
+       FROM allegro_offer_accounts oa JOIN allegro_offers o ON o.id = oa.offer_id
+      WHERE oa.allegro_offer_id IN (${ph}) GROUP BY oa.allegro_offer_id`,
+    uniq
+  ).catch(() => []);
+  for (const r of rows) if (r.updated_at) map.set(String(r.ref), new Date(r.updated_at).toISOString());
+  return map;
+}
+
+/** Dopina meta.date (data modyfikacji z naszej bazy) i sortuje najnowsze na górze. */
+async function withOfferDates(items: CompareItem[]): Promise<CompareItem[]> {
+  const dates = await offerDatesByRef(items.map((i) => i.ref));
+  for (const it of items) it.meta = { ...(it.meta || {}), date: dates.get(it.ref) ?? null };
+  return items.sort((a, b) => (b.meta?.date || '').localeCompare(a.meta?.date || ''));
 }
 
 /** Flatten a marketplace offer into a scalar map (dot keys; arrays joined) for table columns/export. */
@@ -89,7 +116,7 @@ export async function GET(req: NextRequest) {
           fields: flatten(o.raw || {}),
         };
       });
-      return NextResponse.json({ items, total, page, perPage });
+      return NextResponse.json({ items: await withOfferDates(items), total, page, perPage });
     }
 
     // ── Allegro ──────────────────────────────────────────────────────────────
@@ -140,7 +167,7 @@ export async function GET(req: NextRequest) {
         fields: flatten(raw),
       };
     });
-    return NextResponse.json({ items, total, page, perPage });
+    return NextResponse.json({ items: await withOfferDates(items), total, page, perPage });
   } catch (error) {
     return NextResponse.json({ error: String(error), items: [], total: 0 }, { status: 500 });
   }

@@ -14,7 +14,7 @@ interface Item {
   state: string;
   market: { price: number | null; quantity: number | null };
   base: { typesense_id: string; name: string; img: string; sku: string; ean: string; price: number | null; qty: number | null } | null;
-  meta?: { ean?: string | null; stateCode?: string; leadtime?: number; logisticClass?: string };
+  meta?: { ean?: string | null; stateCode?: string; leadtime?: number; logisticClass?: string; date?: string | null };
   fields?: Record<string, string | number | boolean>;
 }
 
@@ -50,6 +50,21 @@ export default function OffersCompareTable({
   const [showColsPanel, setShowColsPanel] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null);
+  const [xmlBusy, setXmlBusy] = useState(false);
+
+  // Empik: wyślij dane ofertowe z feedu XML wprost do Empik (import OF01).
+  const pushEmpikXml = async () => {
+    if (!confirm('Wysłać dane ofertowe z feedu XML do Empik?')) return;
+    setXmlBusy(true);
+    try {
+      const res = await fetch('/api/marketplace/empik-offers-xml', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const d = await res.json();
+      if (res.ok) toast.success(`Wysłano ${d.offers} ofert do Empik (import ${d.importId}).`);
+      else toast.error(d.error || 'Błąd wysyłki XML');
+    } catch (e) {
+      toast.error(`Błąd wysyłki XML: ${String(e)}`);
+    } finally { setXmlBusy(false); }
+  };
 
   const accentBtn = `${accentCls.btn} text-white`;
 
@@ -140,7 +155,7 @@ export default function OffersCompareTable({
     if (baseFilter === 'without' && it.base) return false;
     if (ql && !(`${it.base?.name || ''} ${it.title || ''} ${it.ref} ${it.base?.sku || ''} ${it.ean || ''} ${it.base?.ean || ''}`.toLowerCase().includes(ql))) return false;
     return true;
-  });
+  }).sort((a, b) => (b.meta?.date || '').localeCompare(a.meta?.date || '')); // najnowsze (data modyfikacji) na górze
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   // ── Dynamic columns + XLSX export ──────────────────────────────────────────
@@ -252,6 +267,13 @@ export default function OffersCompareTable({
           <span className="text-xs text-gray-400">
             {lastSync ? `Ostatnie wczytanie: ${new Date(lastSync).toLocaleString('pl')}` : 'Nie wczytano jeszcze ofert'}
           </span>
+          {slug === 'empik' && (
+            <button onClick={pushEmpikXml} disabled={xmlBusy}
+              className="btn-sm px-4 font-semibold rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60"
+              title="Pobierz feed XML i wyślij dane ofertowe do Empik przez API">
+              {xmlBusy ? 'Wysyłam…' : 'Wyślij oferty XML → Empik'}
+            </button>
+          )}
           <button onClick={() => runSync(true)} disabled={syncing}
             className={`btn-sm px-4 font-semibold rounded-md text-white disabled:opacity-60 ${accentBtn}`}>
             {syncing ? 'Wczytuję…' : `Wczytaj oferty z ${mpLabel}`}
@@ -348,15 +370,16 @@ export default function OffersCompareTable({
               <th className="text-right px-3 py-2 font-medium">Ilość baza</th>
               <th className="text-right px-3 py-2 font-medium">Ilość {mpLabel}</th>
               <th className="text-center px-3 py-2 font-medium">Status</th>
+              <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Data ▾</th>
               {extraCols.map((c) => <th key={c} className="text-left px-3 py-2 font-medium whitespace-nowrap">{c}</th>)}
               <th className="text-right px-4 py-2 font-medium">Akcje</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <tr><td colSpan={8 + extraCols.length} className="px-4 py-8 text-center text-gray-400">Ładowanie…</td></tr>
+              <tr><td colSpan={9 + extraCols.length} className="px-4 py-8 text-center text-gray-400">Ładowanie…</td></tr>
             ) : visible.length === 0 ? (
-              <tr><td colSpan={8 + extraCols.length} className="px-4 py-8 text-center text-gray-400">Brak ofert.</td></tr>
+              <tr><td colSpan={9 + extraCols.length} className="px-4 py-8 text-center text-gray-400">Brak ofert.</td></tr>
             ) : visible.map((it) => {
               const e = edit[it.ref];
               return (
@@ -394,6 +417,9 @@ export default function OffersCompareTable({
                   </td>
                   <td className="px-3 py-2 text-center">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{it.state}</span>
+                  </td>
+                  <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">
+                    {it.meta?.date ? new Date(it.meta.date).toLocaleString('pl') : '—'}
                   </td>
                   {extraCols.map((c) => {
                     const v = cell(it, c);

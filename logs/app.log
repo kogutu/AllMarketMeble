@@ -13,3 +13,56 @@
 {"timestamp":"2026-06-23T07:16:10.811Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"krzesło_altan_kremowy_tkanina,_podstawa_dąb","productImportId":"6798836","offerImportId":"229370629","status":"pending"}}}
 {"timestamp":"2026-06-23T07:18:02.749Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"fotel_cariel_beżowy-melanż_tkanina,_podstawa_beżowy-melanż","status":"error","raw":{"missingAttributes":["STR_GOLD","CATALOG_CODE","PELNY_TYTUL","OPIS_PRODUKTU_PELNY","VAT_VALUE"]}}}}
 {"timestamp":"2026-06-23T07:31:36.298Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"fotel_cariel_beżowy-melanż_tkanina,_podstawa_beżowy-melanż","status":"error","raw":{"missingAttributes":["STR_GOLD"]}}}}
+{"timestamp":"2026-06-28T18:04:34.335Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6847503"}}
+{"timestamp":"2026-06-28T18:04:34.481Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"230806788"}}
+{"timestamp":"2026-06-28T18:04:34.481Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_emerald_niebieski-szkło,_podstawa_niebieski","productImportId":"6847503","offerImportId":"230806788","status":"pending"}}}
+{"timestamp":"2026-06-28T18:09:24.516Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6847535"}}
+{"timestamp":"2026-06-28T18:09:24.676Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"230807589"}}
+{"timestamp":"2026-06-28T18:09:24.676Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_emerald_niebieski-szkło,_podstawa_niebieski","productImportId":"6847535","offerImportId":"230807589","status":"pending"}}}
+{"timestamp":"2026-06-28T18:17:43.088Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6847558"}}
+{"timestamp":"2026-06-28T18:17:43.237Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"230809386"}}
+{"timestamp":"2026-06-28T18:17:43.237Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_emerald_niebieski-szkło,_podstawa_niebieski","productImportId":"6847558","offerImportId":"230809386","status":"pending"}}}
+{"timestamp":"2026-06-28T18:23:35.571Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6847566"}}
+{"timestamp":"2026-06-28T18:23:35.729Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"230810798"}}
+{"timestamp":"2026-06-28T18:23:35.729Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_emerald_niebieski-szkło,_podstawa_niebieski","productImportId":"6847566","offerImportId":"230810798","status":"pending"}}}
+{"timestamp":"2026-06-28T20:08:35.126Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6847908"}}
+{"timestamp":"2026-06-28T20:08:35.281Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"230832379"}}
+{"timestamp":"2026-06-28T20:08:35.281Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_emerald_niebieski-szkło,_podstawa_niebieski","productImportId":"6847908","offerImportId":"230832379","status":"pending"}}}
+{"timestamp":"2026-06-29T06:03:24.049Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6851042"}}
+{"timestamp":"2026-06-29T06:03:24.222Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"230906757"}}
+{"timestamp":"2026-06-29T06:03:24.223Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"biurko_otso-140_beż,_podstawa_czarny","productImportId":"6851042","offerImportId":"230906757","status":"pending"}}}
+{"timestamp":"2026-06-29T06:05:51.472Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"228967"}}
+{"timestamp":"2026-06-29T06:05:51.640Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4511219"}}
+{"timestamp":"2026-06-29T06:05:51.640Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"biurko_otso-140_beż,_podstawa_czarny","productImportId":"228967","offerImportId":"4511219","status":"pending"}}}
+{"timestamp":"2026-06-29T06:47:42.952Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"228968"}}
+{"timestamp":"2026-06-29T06:47:43.145Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4511444"}}
+{"timestamp":"2026-06-29T06:47:43.146Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"biurko_otso-140_beż,_podstawa_czarny","productImportId":"228968","offerImportId":"4511444","status":"pending"}}}
+{"timestamp":"2026-06-29T06:59:54.038Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"228971"}}
+{"timestamp":"2026-06-29T06:59:54.213Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4511507"}}
+{"timestamp":"2026-06-29T06:59:54.214Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"biurko_otso-140_beż,_podstawa_czarny","productImportId":"228971","offerImportId":"4511507","status":"pending"}}}
+{"timestamp":"2026-07-03T06:36:06.990Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6897250"}}
+{"timestamp":"2026-07-03T06:36:07.132Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"232066632"}}
+{"timestamp":"2026-07-03T06:36:07.133Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"biurko_otso-140_beż,_podstawa_czarny","productImportId":"6897250","offerImportId":"232066632","status":"pending"}}}
+{"timestamp":"2026-07-03T06:41:32.390Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6897289"}}
+{"timestamp":"2026-07-03T06:41:32.534Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"232067713"}}
+{"timestamp":"2026-07-03T06:41:32.535Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"biurko_otso-140_orzech,_podstawa_czarny","productImportId":"6897289","offerImportId":"232067713","status":"pending"}}}
+{"timestamp":"2026-07-03T07:38:15.397Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6897816"}}
+{"timestamp":"2026-07-03T07:38:15.594Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"232081030"}}
+{"timestamp":"2026-07-03T07:38:15.594Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_elvaron_biały-marmur,_podstawa_złoty-champagne","productImportId":"6897816","offerImportId":"232081030","status":"pending"}}}
+{"timestamp":"2026-07-03T07:38:16.767Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6897818"}}
+{"timestamp":"2026-07-03T07:38:16.907Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"232081034"}}
+{"timestamp":"2026-07-03T07:38:16.907Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_aurum_kremowy-marmur,_podstawa_złoty-champagne","productImportId":"6897818","offerImportId":"232081034","status":"pending"}}}
+{"timestamp":"2026-07-03T07:38:18.093Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6897819"}}
+{"timestamp":"2026-07-03T07:38:18.232Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"232081038"}}
+{"timestamp":"2026-07-03T07:38:18.232Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"fotel_velo-move_czarny_welur,_podstawa_czarny","productImportId":"6897819","offerImportId":"232081038","status":"pending"}}}
+{"timestamp":"2026-07-03T07:38:19.060Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6897820"}}
+{"timestamp":"2026-07-03T07:38:19.199Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"232081039"}}
+{"timestamp":"2026-07-03T07:38:19.199Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_emerald_niebieski-szkło,_podstawa_niebieski","productImportId":"6897820","offerImportId":"232081039","status":"pending"}}}
+{"timestamp":"2026-07-03T07:38:20.352Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6897822"}}
+{"timestamp":"2026-07-03T07:38:20.517Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"232081043"}}
+{"timestamp":"2026-07-03T07:38:20.517Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"konsola_cristal_niebieski,_podstawa_niebieski","productImportId":"6897822","offerImportId":"232081043","status":"pending"}}}
+{"timestamp":"2026-07-03T07:55:44.087Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6897997"}}
+{"timestamp":"2026-07-03T07:55:44.248Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"232085311"}}
+{"timestamp":"2026-07-03T07:55:44.249Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"biurko_amaril_brąz-szkło,_podstawa_brąz-szkło","productImportId":"6897997","offerImportId":"232085311","status":"pending"}}}
+{"timestamp":"2026-07-03T08:40:34.148Z","level":"info","message":"mirakl importOffersXml","data":{"operator":"empik","importId":"232097248","bytes":4364285}}
+{"timestamp":"2026-07-03T09:14:19.289Z","level":"info","message":"mirakl importOffersXml","data":{"operator":"empik","importId":"232106589","bytes":4364283}}

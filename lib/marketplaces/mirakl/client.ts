@@ -3,6 +3,8 @@ import { queryOne } from '@/lib/db';
 import { cacheGet, cacheSet } from '@/lib/cache';
 import logger from '@/lib/logger';
 import { getOperator, type MiraklOperator } from './operators';
+import { fillMiraklTemplate, isTemplateOperator } from './empikTemplate';
+import { operatorTemplate } from './operatorTemplates';
 
 /**
  * Generic Mirakl client. One implementation drives every Mirakl operator (Empik + future ones);
@@ -60,6 +62,7 @@ const EP = {
   productImports: '/api/products/imports',
   productImport: (id: string) => `/api/products/imports/${id}`,
   offers: '/api/offers',                 // OF24 (POST JSON) + OF21 (GET list)
+  offerImports: '/api/offers/imports',   // OF01 (POST plik CSV/XML)
   offerImport: (id: string) => `/api/offers/imports/${id}`,
 };
 
@@ -108,9 +111,24 @@ export class MiraklClient {
     const res = await this.api.get(EP.valuesLists, { params: { code } });
     const lists = (res.data?.values_lists ?? []) as { code: string; values?: { code: string; label: string }[] }[];
     const all = (lists.find((l) => l.code === code) ?? lists[0])?.values ?? [];
-    // Some Empik value lists have 50k–100k+ entries (e.g. brands). Cap to keep payload/memory
+    // Some Empik value lists have 50k–100k+ entries (e.g. brands/producers). Cap to keep payload/memory
     // sane — a dropdown of that size is unusable anyway; AI fill trims further on its side.
-    const values = all.slice(0, 500);
+    let values = all.slice(0, 500);
+    // …ale niektóre potrzebne wpisy (np. nasz producent „Mebel-Partner") leżą poza pierwszymi 500
+    // w olbrzymiej liście marek → select pokazywał pusto. Doklejamy z przodu wpisy pasujące do
+    // skonfigurowanego domyślnego producenta, żeby zawsze były dostępne do wyboru.
+    const mustInclude = process.env.DEFAULT_PRODUCENT_MARKA
+      || process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA
+      || 'Mebel-Partner';
+    if (mustInclude && all.length > values.length) {
+      const needle = mustInclude.toLowerCase().replace(/[\s-]+/g, '');
+      const have = new Set(values.map((v) => v.code));
+      const extra = all.filter((v) => {
+        const hay = `${v.label} ${v.code}`.toLowerCase().replace(/[\s-]+/g, '');
+        return hay.includes(needle) && !have.has(v.code);
+      });
+      if (extra.length) values = [...extra, ...values];
+    }
     cacheSet(key, values);
     return values;
   }
@@ -118,9 +136,21 @@ export class MiraklClient {
   // ── Product import (async) ─────────────────────────────────────────────────
   /** Submit a product feed (array of {column->value} records). Returns import_id. */
   async importProducts(records: Record<string, string>[]): Promise<string> {
-    const csv = recordsToCsv(records);
     const form = new FormData();
-    form.append('file', new Blob([csv], { type: 'text/csv' }), 'products.csv');
+    if (isTemplateOperator(this.operator.id)) {
+      // Empik/BRW przyjmują import wyłącznie swoim szablonem XLSX (a nie generycznym CSV Mirakla).
+      const xlsx = fillMiraklTemplate(this.operator.id, records);
+      // Nazwa pliku = EAN/GTIN produktu (kody pól zależne od operatora; fallback SKU / „products").
+      const tpl = operatorTemplate(this.operator.id);
+      const ean = (tpl && (records[0]?.[tpl.fields.ean] || records[0]?.[tpl.fields.sku])) || 'products';
+      const fileName = `${String(ean).replace(/[^0-9A-Za-z._-]/g, '')}.xlsx`;
+      form.append('file', new Blob([new Uint8Array(xlsx)], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }), fileName);
+    } else {
+      const csv = recordsToCsv(records);
+      form.append('file', new Blob([csv], { type: 'text/csv' }), 'products.csv');
+    }
     form.append('import_mode', 'NORMAL');
     const res = await this.api.post(EP.productImports, form);
     const importId = String(res.data?.import_id ?? res.data?.product_import_id ?? '');
@@ -149,6 +179,17 @@ export class MiraklClient {
   /** Withdraw (delete) an offer from the marketplace by shop_sku (OF24 update_delete=delete). */
   async withdrawOffer(shopSku: string): Promise<string> {
     return this.importOffers([{ shop_sku: shopSku, update_delete: 'delete' }]);
+  }
+
+  /** Import ofert z pliku XML (OF01) — feed w formacie Mirakla `<import><offers>…`. Zwraca import_id. */
+  async importOffersXml(xml: string): Promise<string> {
+    const form = new FormData();
+    form.append('file', new Blob([xml], { type: 'application/xml' }), 'offers.xml');
+    form.append('import_mode', 'NORMAL');
+    const res = await this.api.post(EP.offerImports, form);
+    const importId = String(res.data?.import_id ?? res.data?.offer_import_id ?? '');
+    logger.info('mirakl importOffersXml', { operator: this.operator.id, importId, bytes: xml.length });
+    return importId;
   }
 
   async getOfferImportStatus(importId: string): Promise<{ status: string; hasErrorReport: boolean; raw: unknown }> {

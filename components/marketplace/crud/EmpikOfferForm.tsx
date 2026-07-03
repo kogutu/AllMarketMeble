@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { MebleProduct, MiraklFormData } from '@/types';
 import CrudOverlay from './CrudOverlay';
+import SearchSelect from '@/components/ui/SearchSelect';
 
 const OPERATOR = 'empik';          // ← stały operator tego formularza
 const MP_NAME = 'Empik';
@@ -328,14 +329,12 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
   // Pojedyncze pole atrybutu (select / media / tekst) — używane w obu trybach renderowania.
   const renderAttr = (a: Attribute) => {
     const invalid = a.required && isAttrEmpty(a);
-    const cls = `input${invalid ? ' border-red-400 ring-1 ring-red-200' : ''}`;
+    const cls = `input${invalid ? ' border-red-400 ring-1 ring-red-200' : ''}${!isAttrEmpty(a) ? ' is-filled' : ''}`;
     if (a.values && a.values.length > 0) {
       return (
-        <select className={cls} value={(form.attributes[a.code] as string) || ''}
-          onChange={(e) => setAttr(a.code, e.target.value)}>
-          <option value="">—</option>
-          {a.values.map((v) => <option key={v.code} value={v.code}>{v.label}</option>)}
-        </select>
+        <SearchSelect className={cls} options={a.values}
+          value={(form.attributes[a.code] as string) || ''}
+          onChange={(code) => setAttr(a.code, code)} />
       );
     }
     if (a.type === 'MEDIA') {
