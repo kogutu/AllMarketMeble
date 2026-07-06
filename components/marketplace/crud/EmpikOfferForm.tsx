@@ -65,6 +65,8 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
   const [publishedRef, setPublishedRef] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState<null | 'category' | 'fill'>(null);
+  const [aiPendingAction, setAiPendingAction] = useState<null | (() => void)>(null);
+  const [aiUnlocked, setAiUnlocked] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [attrsLoadedFor, setAttrsLoadedFor] = useState('');
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -296,9 +298,15 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
     }
   };
 
-  // Auto-dopasowanie kategorii AI — dopiero PO sprawdzeniu draftu i tylko gdy nie odtworzono danych.
+  // guardAi — intercepts AI actions when offer is already published
+  const guardAi = (action: () => void) => {
+    if (!publishedRef || aiUnlocked) { action(); return; }
+    setAiPendingAction(() => action);
+  };
+
+  // Auto-dopasowanie kategorii AI — dopiero PO sprawdzeniu draftu, tylko gdy nie odtworzono danych i NIE jest wystawiona.
   useEffect(() => {
-    if (draftLoaded && !aiDisabledRef.current && !form.categoryCode && !autoSuggestedRef.current) {
+    if (draftLoaded && !aiDisabledRef.current && !form.categoryCode && !autoSuggestedRef.current && !publishedRef) {
       autoSuggestedRef.current = true;
       runSuggestCategory();
     }
@@ -314,8 +322,9 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
   }, [form.categoryCode]);
 
   // Po dopasowaniu kategorii i załadowaniu atrybutów → automatycznie uruchom AI „Wypełnij formularz”.
+  // Nigdy dla wystawionych ofert — dane muszą pochodzić z marketplace, nie z AI.
   useEffect(() => {
-    if (form.categoryCode && attrsLoadedFor === form.categoryCode && !autoFillRef.current && !aiDisabledRef.current && aiBusy === null) {
+    if (form.categoryCode && attrsLoadedFor === form.categoryCode && !autoFillRef.current && !aiDisabledRef.current && aiBusy === null && !publishedRef) {
       autoFillRef.current = true;
       runAiFill();
     }
@@ -496,19 +505,54 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
         </div>
       )}
 
+      {/* AI confirmation banner — shown when AI clicked on published offer */}
+      {aiPendingAction && (
+        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 flex items-start gap-3">
+          <span className="text-amber-500 text-xl shrink-0">⚠</span>
+          <div className="flex-1 space-y-2">
+            <p className="text-sm font-semibold text-amber-800">
+              Ta oferta jest już wystawiona na {MP_NAME} — AI może nadpisać rzeczywiste dane
+            </p>
+            <p className="text-xs text-amber-700">
+              Formularz powinien zawierać twarde dane z marketplace. Użycie AI może wygenerować błędne wartości atrybutów.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setAiUnlocked(true); aiPendingAction(); setAiPendingAction(null); }}
+                className="btn-sm px-3 py-1.5 bg-amber-600 text-white rounded-md text-xs font-semibold hover:bg-amber-700"
+              >
+                Rozumiem — uruchom AI
+              </button>
+              <button
+                onClick={() => setAiPendingAction(null)}
+                className="btn-sm px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-md text-xs font-semibold hover:bg-amber-50"
+              >
+                Anuluj
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI toolbar */}
       <div className="rounded-lg bg-indigo-50 border border-indigo-100 overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 px-3 py-2">
           <span className="text-xs font-semibold text-indigo-700">Asystent AI:</span>
-          <button className="btn-secondary btn-sm" onClick={runSuggestCategory} disabled={aiBusy !== null}>
-            {aiBusy === 'category' ? 'Dopasowuję…' : '1. Dopasuj kategorię (AI)'}
+          <button
+            className={`btn-secondary btn-sm${publishedRef && !aiUnlocked ? ' opacity-50' : ''}`}
+            onClick={() => guardAi(runSuggestCategory)}
+            disabled={aiBusy !== null}
+            title={publishedRef && !aiUnlocked ? 'AI zablokowane — oferta wystawiona' : undefined}
+          >
+            {aiBusy === 'category' ? 'Dopasowuję…' : publishedRef && !aiUnlocked ? '🔒 Dopasuj kategorię (AI)' : '1. Dopasuj kategorię (AI)'}
           </button>
           <button
-            className={`btn-sm px-3 font-semibold text-white ${aiBusy === 'fill' ? 'bg-indigo-500' : 'bg-indigo-600 hover:bg-indigo-700'} rounded-md disabled:opacity-50`}
-            onClick={runAiFill}
+            className={`btn-sm px-3 font-semibold text-white ${aiBusy === 'fill' ? 'bg-indigo-500' : 'bg-indigo-600 hover:bg-indigo-700'} rounded-md disabled:opacity-50${publishedRef && !aiUnlocked ? ' opacity-50' : ''}`}
+            onClick={() => guardAi(runAiFill)}
             disabled={!form.categoryCode || aiBusy !== null}
+            title={publishedRef && !aiUnlocked ? 'AI zablokowane — oferta wystawiona' : undefined}
           >
-            {aiBusy === 'fill' ? '✨ Wypełniam formularz…' : '2. Wypełnij formularz (AI)'}
+            {aiBusy === 'fill' ? '✨ Wypełniam formularz…' : publishedRef && !aiUnlocked ? '🔒 Wypełnij formularz (AI)' : '2. Wypełnij formularz (AI)'}
           </button>
         </div>
         {aiBusy === 'fill' && <div className="h-1 w-full bg-indigo-500 animate-pulse" />}

@@ -389,6 +389,9 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
   const [categoryParams, setCategoryParams] = useState<AllegroParamDef[]>([]);
   const [publishError, setPublishError] = useState<{ summary: string; items: string[]; raw?: string } | null>(null);
   const [loadingAIFix, setLoadingAIFix] = useState(false);
+  // AI lock — in edit mode AI is disabled until user explicitly confirms
+  const [aiUnlocked, setAiUnlocked] = useState(false);
+  const [aiPendingAction, setAiPendingAction] = useState<null | (() => void)>(null);
   const [aiFixResult, setAiFixResult] = useState<{ summary: string; changes: { field: string; was: string; fixed: string; reason: string }[] } | null>(null);
   const [payloadPreview, setPayloadPreview] = useState<object | null>(null);
 
@@ -605,7 +608,8 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
 
   // ── AI category suggestion — runs when no category set yet ──────────────
   useEffect(() => {
-    if (!needsAutoFill || form.categoryId || loadingDraft) return;
+    // Never run AI auto-fill on an already-published offer — data must come from Allegro API
+    if (!needsAutoFill || form.categoryId || loadingDraft || isPublished) return;
     setLoadingSuggestions(true);
 
     fetch('/api/ai/suggest-category', {
@@ -644,6 +648,7 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
     if (!needsAutoFill) return;
     if (autoFillTriggered.current) return;
     if (loadingDraft) return;
+    if (isPublished) return;  // never auto-fill published offers — data comes from Allegro API
     if (!form.categoryId) return;  // wait — user must pick a category first
     if (paramsLoadedForCategory !== form.categoryId) return;  // wait for params to finish loading
 
@@ -1014,6 +1019,15 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
     }
   };
 
+  // Whether this offer is already published on Allegro (published offers = edit mode = AI locked)
+  const isPublished = Object.keys(publishedAccounts).length > 0 || editMode;
+
+  // Wrap any AI action: if offer is published and AI not yet unlocked, intercept and ask first
+  const guardAi = (action: () => void) => {
+    if (!isPublished || aiUnlocked) { action(); return; }
+    setAiPendingAction(() => action);
+  };
+
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [loadingLive, setLoadingLive] = useState(false);
 
@@ -1252,14 +1266,40 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
         </div>
       )}
 
+      {/* AI confirmation banner — shown when user clicks AI on a published offer */}
+      {aiPendingAction && (
+        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 flex items-start gap-3">
+          <span className="text-amber-500 text-xl shrink-0">⚠</span>
+          <div className="flex-1 space-y-2">
+            <p className="text-sm font-semibold text-amber-800">
+              Ta oferta jest już wystawiona na Allegro — AI może nadpisać rzeczywiste dane
+            </p>
+            <p className="text-xs text-amber-700">
+              Formularz powinien zawierać twarde dane z Allegro (pobrane przyciskiem ↓). Użycie AI może wygenerować błędne lub niezgodne wartości parametrów.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setAiUnlocked(true); aiPendingAction(); setAiPendingAction(null); }}
+                className="btn-sm px-3 py-1.5 bg-amber-600 text-white rounded-md text-xs font-semibold hover:bg-amber-700"
+              >
+                Rozumiem — uruchom AI
+              </button>
+              <button
+                onClick={() => setAiPendingAction(null)}
+                className="btn-sm px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-md text-xs font-semibold hover:bg-amber-50"
+              >
+                Anuluj
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI action bar */}
       <div className="card p-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium text-gray-700 mr-1">AI:</span>
-          <button onClick={handleAIFill} disabled={loadingFill} className="btn-secondary btn-sm">
-            {loadingFill ? <><Spinner /> Wypełnianie...</> : '✨ Wypełnij'}
-          </button>
-          {/* In edit mode — fetch live data from Allegro to pre-populate the form */}
+          {/* In edit mode — fetch live data from Allegro first (primary action) */}
           {Object.keys(publishedAccounts).length > 0 && (
             <div className="flex gap-1.5">
               {Object.entries(publishedAccounts).map(([accId, pub]) => (
@@ -1268,17 +1308,35 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
                   onClick={() => handleLoadFromAllegro(accId)}
                   disabled={loadingLive}
                   title={`Pobierz aktualne dane oferty #${pub.allegroOfferId} z Allegro`}
-                  className="btn-secondary btn-sm text-blue-600 border-blue-200 hover:bg-blue-50"
+                  className="btn-sm px-3 py-1.5 rounded-md font-semibold text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {loadingLive ? <><Spinner /> Pobieranie...</> : `↓ Allegro #${pub.allegroOfferId}`}
+                  {loadingLive ? <><Spinner /> Pobieranie...</> : `↓ Pobierz z Allegro #${pub.allegroOfferId}`}
                 </button>
               ))}
+              <span className="text-xs text-gray-400 self-center">|</span>
             </div>
           )}
-          <button onClick={handleGenerateDescription} disabled={loadingDescribe} className="btn-secondary btn-sm">
-            {loadingDescribe ? <><Spinner /> Generowanie...</> : '📝 Opis'}
+          <button
+            onClick={() => guardAi(handleAIFill)}
+            disabled={loadingFill}
+            className={clsx('btn-secondary btn-sm', isPublished && !aiUnlocked && 'opacity-50')}
+            title={isPublished && !aiUnlocked ? 'AI zablokowane na wystawionej ofercie — kliknij aby potwierdzić' : undefined}
+          >
+            {loadingFill ? <><Spinner /> Wypełnianie...</> : isPublished && !aiUnlocked ? '🔒 Wypełnij AI' : '✨ Wypełnij'}
           </button>
-          <button onClick={handleValidate} disabled={loadingValidate} className="btn-secondary btn-sm">
+          <button
+            onClick={() => guardAi(handleGenerateDescription)}
+            disabled={loadingDescribe}
+            className={clsx('btn-secondary btn-sm', isPublished && !aiUnlocked && 'opacity-50')}
+            title={isPublished && !aiUnlocked ? 'AI zablokowane na wystawionej ofercie — kliknij aby potwierdzić' : undefined}
+          >
+            {loadingDescribe ? <><Spinner /> Generowanie...</> : isPublished && !aiUnlocked ? '🔒 Opis AI' : '📝 Opis'}
+          </button>
+          <button
+            onClick={() => guardAi(handleValidate)}
+            disabled={loadingValidate}
+            className="btn-secondary btn-sm"
+          >
             {loadingValidate ? <><Spinner /> Walidacja...</> : '🔍 Waliduj'}
           </button>
           <div className="ml-auto flex gap-2">
