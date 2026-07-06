@@ -531,7 +531,10 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
         if (allegroAccountOffers.length > 0) {
           const map: Record<string, { allegroOfferId: string; status: string }> = {};
           for (const ao of allegroAccountOffers) {
-            if (ao.allegro_offer_id && (!ao.marketplace || ao.marketplace === 'allegro')) {
+            // marketplace column now included — filter strictly to allegro entries.
+            // Also guard by numeric offer ID (Mirakl uses SKU strings, Allegro uses numeric IDs).
+            const isAllegro = ao.marketplace === 'allegro' || (!ao.marketplace && /^\d+$/.test(ao.allegro_offer_id ?? ''));
+            if (ao.allegro_offer_id && isAllegro) {
               map[ao.account_id] = { allegroOfferId: ao.allegro_offer_id, status: ao.status };
             }
           }
@@ -1299,20 +1302,25 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
       <div className="card p-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium text-gray-700 mr-1">AI:</span>
-          {/* In edit mode — fetch live data from Allegro first (primary action) */}
-          {Object.keys(publishedAccounts).length > 0 && (
+          {/* In edit mode — fetch live data from Allegro first (primary action).
+              Only show for accounts that exist in the Allegro accounts list (not Mirakl slugs). */}
+          {Object.entries(publishedAccounts)
+            .filter(([accId]) => accounts.some((a) => a.account_id === accId))
+            .length > 0 && (
             <div className="flex gap-1.5">
-              {Object.entries(publishedAccounts).map(([accId, pub]) => (
-                <button
-                  key={accId}
-                  onClick={() => handleLoadFromAllegro(accId)}
-                  disabled={loadingLive}
-                  title={`Pobierz aktualne dane oferty #${pub.allegroOfferId} z Allegro`}
-                  className="btn-sm px-3 py-1.5 rounded-md font-semibold text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {loadingLive ? <><Spinner /> Pobieranie...</> : `↓ Pobierz z Allegro #${pub.allegroOfferId}`}
-                </button>
-              ))}
+              {Object.entries(publishedAccounts)
+                .filter(([accId]) => accounts.some((a) => a.account_id === accId))
+                .map(([accId, pub]) => (
+                  <button
+                    key={accId}
+                    onClick={() => handleLoadFromAllegro(accId)}
+                    disabled={loadingLive}
+                    title={`Pobierz aktualne dane oferty #${pub.allegroOfferId} z Allegro`}
+                    className="btn-sm px-3 py-1.5 rounded-md font-semibold text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {loadingLive ? <><Spinner /> Pobieranie...</> : `↓ Pobierz z Allegro #${pub.allegroOfferId}`}
+                  </button>
+                ))}
               <span className="text-xs text-gray-400 self-center">|</span>
             </div>
           )}
