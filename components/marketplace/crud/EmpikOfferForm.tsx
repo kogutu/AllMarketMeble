@@ -62,6 +62,7 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   const [loadingAttrs, setLoadingAttrs] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(null);
+  const [publishedRef, setPublishedRef] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState<null | 'category' | 'fill'>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -116,6 +117,11 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
           setForm((f) => ({ ...f, ...(picked!.fd as Partial<MiraklFormData>) }));
           loadAttributes(String(picked.fd.categoryCode)); // tylko pola, bez auto-AI (blokuje aiDisabledRef)
           toast.success('Wczytano zapisany szkic — pomijam AI', { id: 'empik-draft-restored' });
+          // Sprawdź czy oferta jest już wystawiona — używamy offerAccountsMap[picked.id],
+          // bo d.accountOffers należy do offers[0] (może być Allegro, nie Mirakl).
+          const pickedAccounts = ((d.offerAccountsMap?.[picked.id] || d.accountOffers || []) as { account_id: string; allegro_offer_id: string | null; status: string }[]);
+          const published = pickedAccounts.find((ao) => ao.allegro_offer_id && (ao.status === 'active' || ao.status === 'pending'));
+          if (published?.allegro_offer_id) setPublishedRef(published.allegro_offer_id);
         }
       })
       .catch(() => {})
@@ -412,6 +418,8 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
       if (res.ok && d.success) {
         toast.success(`Wysłano do ${MP_NAME} (import w toku)`);
         setStatus('pending — import produktu i oferty zgłoszony, użyj „Sprawdź status”.');
+        if (d.ref) setPublishedRef(String(d.ref));
+        else if (form.sku) setPublishedRef(form.sku);
       } else {
         const missing = parseMissing(d.details);
         if (missing.length) {
@@ -449,7 +457,7 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
         body: JSON.stringify({ slug: OPERATOR, ref: form.sku, accountId, meta: { operator: OPERATOR } }),
       });
       const d = await res.json();
-      if (res.ok && d.success) { toast.success(`Wycofano z ${MP_NAME}`); setStatus('withdrawn — oferta usunięta z marketplace'); }
+      if (res.ok && d.success) { toast.success(`Wycofano z ${MP_NAME}`); setStatus('withdrawn — oferta usunięta z marketplace'); setPublishedRef(null); }
       else { toast.error('Błąd wycofania'); setStatus(`error: ${d.details || d.error || 'nieznany'}`); }
     } finally { setBusy(false); }
   };
@@ -465,7 +473,16 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
     <div className="card p-5 space-y-5 relative">
       <CrudOverlay show={overlayBusy} label={overlayLabel} accent="indigo" />
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-gray-800">Wystaw na {MP_NAME} (Mirakl)</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-800">
+            {publishedRef ? `Edycja oferty ${MP_NAME}` : `Wystaw na ${MP_NAME}`}
+          </h3>
+          {publishedRef && (
+            <span className="text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200 rounded px-2 py-0.5">
+              SKU: {publishedRef}
+            </span>
+          )}
+        </div>
         <select className="input w-56" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
           {hasAccounts
             ? accounts.map((a) => <option key={a.account_id} value={a.account_id}>{a.account_name}</option>)
@@ -614,11 +631,20 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
         </button>
         <button className="btn-secondary btn-sm" onClick={handleSaveDraft} disabled={busy}>Zapisz szkic</button>
         {draftId && <button className="btn-secondary btn-sm" onClick={handleSync} disabled={busy}>Sprawdź status</button>}
-        <button className="btn-primary btn-sm" onClick={handlePublish}
-          disabled={busy || !accountId || reqMissing.length > 0}
-          title={reqMissing.length > 0 ? `Brakuje: ${reqMissing.map((a) => a.label).join(', ')}` : undefined}>
-          {busy ? '…' : `Wystaw na ${MP_NAME}`}
-        </button>
+        {publishedRef ? (
+          <button className="btn-sm px-4 py-1.5 rounded-md font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50"
+            onClick={handlePublish}
+            disabled={busy || !accountId || reqMissing.length > 0}
+            title={reqMissing.length > 0 ? `Brakuje: ${reqMissing.map((a) => a.label).join(', ')}` : `Aktualizuj ofertę ${publishedRef}`}>
+            {busy ? '…' : `✏ Aktualizuj na ${MP_NAME}`}
+          </button>
+        ) : (
+          <button className="btn-primary btn-sm" onClick={handlePublish}
+            disabled={busy || !accountId || reqMissing.length > 0}
+            title={reqMissing.length > 0 ? `Brakuje: ${reqMissing.map((a) => a.label).join(', ')}` : undefined}>
+            {busy ? '…' : `🚀 Wystaw na ${MP_NAME}`}
+          </button>
+        )}
       </div>
     </div>
   );

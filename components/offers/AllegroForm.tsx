@@ -514,12 +514,23 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
     fetch(`/api/offers?typesense_id=${encodeURIComponent(product.id)}`)
       .then((r) => r.json())
       .then((data) => {
-        const existing = data.offers?.[0];
-        // Load per-account published state
-        if (data.accountOffers?.length > 0) {
+        // Pick the Allegro-specific offer — product may have multiple offers (Allegro + Mirakl/Empik).
+        // Taking [0] (most recently updated) would load Mirakl form_data which has no `params`.
+        const allOffers = (data.offers || []) as { marketplace?: string; form_data?: unknown; id: number; category_id?: string }[];
+        const existing = allOffers.find((o) => !o.marketplace || o.marketplace === 'allegro') ?? allOffers[0];
+
+        // Load per-account published state for the Allegro offer specifically.
+        // data.accountOffers belongs to offers[0] — may be wrong if Mirakl was updated later.
+        // Use offerAccountsMap[existing.id] when available.
+        const allegroAccountOffers = existing
+          ? ((data.offerAccountsMap?.[existing.id] || data.accountOffers || []) as { account_id: string; allegro_offer_id: string; status: string; marketplace?: string }[])
+          : [];
+        if (allegroAccountOffers.length > 0) {
           const map: Record<string, { allegroOfferId: string; status: string }> = {};
-          for (const ao of data.accountOffers as { account_id: string; allegro_offer_id: string; status: string }[]) {
-            if (ao.allegro_offer_id) map[ao.account_id] = { allegroOfferId: ao.allegro_offer_id, status: ao.status };
+          for (const ao of allegroAccountOffers) {
+            if (ao.allegro_offer_id && (!ao.marketplace || ao.marketplace === 'allegro')) {
+              map[ao.account_id] = { allegroOfferId: ao.allegro_offer_id, status: ao.status };
+            }
           }
           setPublishedAccounts(map);
         }
@@ -1004,6 +1015,34 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
   };
 
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [loadingLive, setLoadingLive] = useState(false);
+
+  const handleLoadFromAllegro = async (accountId: string) => {
+    const allegroOfferId = publishedAccounts[accountId]?.allegroOfferId;
+    if (!allegroOfferId) { toast.error('Brak ID oferty Allegro'); return; }
+    setLoadingLive(true);
+    try {
+      const res = await fetch(
+        `/api/allegro/offer?allegroOfferId=${encodeURIComponent(allegroOfferId)}&accountId=${encodeURIComponent(accountId)}`
+      );
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.details || d.error || 'Błąd pobierania');
+      setForm((prev) => ({
+        ...prev,
+        ...d.formData,
+        // Keep our categoryName if Allegro doesn't return it
+        categoryName: d.formData.categoryName || prev.categoryName,
+        // Merge params — live Allegro data takes priority
+        params: { ...prev.params, ...(d.formData.params || {}) },
+      }));
+      draftRestoredRef.current = true;
+      toast.success(`Wczytano dane z Allegro (#${allegroOfferId})`);
+    } catch (e) {
+      toast.error('Błąd: ' + String(e));
+    } finally {
+      setLoadingLive(false);
+    }
+  };
 
   const handleEdit = async (accountId: string) => {
     if (!offerId) { toast.error('Najpierw zapisz draft!'); return; }
@@ -1220,6 +1259,22 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
           <button onClick={handleAIFill} disabled={loadingFill} className="btn-secondary btn-sm">
             {loadingFill ? <><Spinner /> Wypełnianie...</> : '✨ Wypełnij'}
           </button>
+          {/* In edit mode — fetch live data from Allegro to pre-populate the form */}
+          {Object.keys(publishedAccounts).length > 0 && (
+            <div className="flex gap-1.5">
+              {Object.entries(publishedAccounts).map(([accId, pub]) => (
+                <button
+                  key={accId}
+                  onClick={() => handleLoadFromAllegro(accId)}
+                  disabled={loadingLive}
+                  title={`Pobierz aktualne dane oferty #${pub.allegroOfferId} z Allegro`}
+                  className="btn-secondary btn-sm text-blue-600 border-blue-200 hover:bg-blue-50"
+                >
+                  {loadingLive ? <><Spinner /> Pobieranie...</> : `↓ Allegro #${pub.allegroOfferId}`}
+                </button>
+              ))}
+            </div>
+          )}
           <button onClick={handleGenerateDescription} disabled={loadingDescribe} className="btn-secondary btn-sm">
             {loadingDescribe ? <><Spinner /> Generowanie...</> : '📝 Opis'}
           </button>
@@ -1233,32 +1288,22 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
             <button onClick={handleSave} disabled={loadingSave} className="btn-secondary">
               {loadingSave ? <><Spinner /> Zapisywanie...</> : '💾 Zapisz draft'}
             </button>
-            {editMode && (
-              <span className="text-xs font-semibold text-amber-600 border border-amber-300 bg-amber-50 rounded px-2 py-0.5">
-                Tryb edycji
-              </span>
-            )}
             {accounts.map((acc) => {
               const published = publishedAccounts[acc.account_id];
-              if (editMode) {
-                // Edit mode: show "Edytuj" only for accounts with a published offer
-                if (!published) return null;
+              // editMode (from ?edit=1) acts as early hint before publishedAccounts loads from API
+              if (published || (editMode && loadingDraft)) {
                 return (
                   <button
                     key={acc.account_id}
                     onClick={() => handleEdit(acc.account_id)}
-                    disabled={editingAccountId !== null || !offerId}
-                    title={`Zaktualizuj ofertę Allegro #${published.allegroOfferId}`}
-                    className={clsx(
-                      'btn',
-                      editingAccountId === acc.account_id
-                        ? 'bg-amber-500 text-white border-amber-600'
-                        : 'bg-amber-500 text-white hover:bg-amber-600 border-amber-600'
-                    )}
+                    disabled={editingAccountId !== null || !offerId || loadingDraft}
+                    title={published ? `Zaktualizuj ofertę Allegro #${published.allegroOfferId}` : 'Ładowanie…'}
+                    className="btn bg-amber-500 text-white hover:bg-amber-600 border-amber-600 disabled:opacity-50"
                   >
                     {editingAccountId === acc.account_id
                       ? <><Spinner /> Aktualizowanie...</>
-                      : `✏ Edytuj ${acc.account_name}`}
+                      : loadingDraft ? <><Spinner /> Ładowanie...</>
+                      : `✏ Aktualizuj ${acc.account_name}`}
                   </button>
                 );
               }
@@ -1267,33 +1312,33 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
                   key={acc.account_id}
                   onClick={() => handlePublish(acc.account_id)}
                   disabled={publishingAccountId !== null || !offerId}
-                  title={missingRequired.length > 0 ? `Brakuje: ${missingRequired.map((f) => f.name).join(', ')}` : published ? `Allegro #${published.allegroOfferId}` : undefined}
+                  title={missingRequired.length > 0 ? `Brakuje: ${missingRequired.map((f) => f.name).join(', ')}` : undefined}
                   className={clsx(
                     'btn',
                     publishingAccountId === acc.account_id ? 'btn-success' :
-                      published ? 'bg-green-600 text-white hover:bg-green-700 border-green-700' :
-                        missingRequired.length === 0 ? 'btn-success' : 'opacity-60 cursor-not-allowed bg-gray-300 text-gray-600 hover:bg-gray-300'
+                      missingRequired.length === 0 ? 'btn-success' : 'opacity-60 cursor-not-allowed bg-gray-300 text-gray-600 hover:bg-gray-300'
                   )}
                 >
-                  {publishingAccountId === acc.account_id ? <><Spinner /> Wysyłanie...</> :
-                    published ? `✓ ${acc.account_name}` : `🚀 ${acc.account_name}`}
+                  {publishingAccountId === acc.account_id ? <><Spinner /> Wysyłanie...</> : `🚀 ${acc.account_name}`}
                 </button>
               );
             })}
 
-            <button
-              onClick={() => handlePublishAll()}
-              disabled={statusAll}
-              title="Dodaj do wszystkich kont"
-              className={clsx(
-                'btn',
-                !statusAll ? 'bg-sky-600 text-white hover:bg-sky-700 border-sky-700' :
-                  'opacity-60 cursor-not-allowed bg-gray-300 text-gray-600 hover:bg-gray-300'
-              )}
-            >
-              {publishingAllState ? <><Spinner /> Wysyłanie...</> :
-                statusAll ? `✓ all` : `🚀 all`}
-            </button>
+            {!editMode && (
+              <button
+                onClick={() => handlePublishAll()}
+                disabled={statusAll}
+                title="Dodaj do wszystkich kont"
+                className={clsx(
+                  'btn',
+                  !statusAll ? 'bg-sky-600 text-white hover:bg-sky-700 border-sky-700' :
+                    'opacity-60 cursor-not-allowed bg-gray-300 text-gray-600 hover:bg-gray-300'
+                )}
+              >
+                {publishingAllState ? <><Spinner /> Wysyłanie...</> :
+                  statusAll ? `✓ all` : `🚀 all`}
+              </button>
+            )}
 
             {accounts.length === 0 && (
               <button disabled className="btn btn-success opacity-50">Brak kont Allegro</button>
@@ -1730,19 +1775,18 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
           </button>
           {accounts.map((acc) => {
             const published = publishedAccounts[acc.account_id];
-            if (editMode) {
-              if (!published) return null;
+            if (published || (editMode && loadingDraft)) {
               return (
                 <button
                   key={acc.account_id}
                   onClick={() => handleEdit(acc.account_id)}
-                  disabled={editingAccountId !== null || !offerId}
-                  className={clsx(
-                    'btn bg-amber-500 text-white hover:bg-amber-600 border-amber-600',
-                    editingAccountId === acc.account_id && 'opacity-70'
-                  )}
+                  disabled={editingAccountId !== null || !offerId || loadingDraft}
+                  title={published ? `Allegro #${published.allegroOfferId}` : 'Ładowanie…'}
+                  className="btn bg-amber-500 text-white hover:bg-amber-600 border-amber-600 disabled:opacity-50"
                 >
-                  {editingAccountId === acc.account_id ? 'Aktualizowanie...' : `✏ Edytuj ${acc.account_name}`}
+                  {editingAccountId === acc.account_id ? 'Aktualizowanie...'
+                    : loadingDraft ? 'Ładowanie...'
+                    : `✏ Aktualizuj ${acc.account_name}`}
                 </button>
               );
             }
@@ -1751,15 +1795,9 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
                 key={acc.account_id}
                 onClick={() => handlePublish(acc.account_id)}
                 disabled={publishingAccountId !== null || !offerId}
-                title={published ? `Allegro #${published.allegroOfferId}` : undefined}
-                className={clsx(
-                  'btn',
-                  published ? 'bg-green-600 text-white hover:bg-green-700' :
-                    missingRequired.length === 0 ? 'btn-success' : 'bg-allegro text-white hover:bg-allegro-dark'
-                )}
+                className={clsx('btn', missingRequired.length === 0 ? 'btn-success' : 'bg-allegro text-white hover:bg-allegro-dark')}
               >
-                {publishingAccountId === acc.account_id ? 'Wysyłanie...' :
-                  published ? `✓ ${acc.account_name}` : `🚀 ${acc.account_name}`}
+                {publishingAccountId === acc.account_id ? 'Wysyłanie...' : `🚀 ${acc.account_name}`}
               </button>
             );
           })}

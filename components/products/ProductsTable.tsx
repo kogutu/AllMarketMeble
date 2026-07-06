@@ -15,6 +15,7 @@ const MARKETPLACES = listMarketplaces();
 const PER_PAGE = 250;
 
 type LiveStatus = { listed: boolean; active: boolean };
+type DotState = 'active' | 'listed' | 'none';
 
 interface Row {
   id: string;
@@ -55,6 +56,15 @@ export default function ProductsTable() {
   const [loaded, setLoaded] = useState(0);
   const [total, setTotal] = useState(0);
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
+  // Dot filters: per-marketplace set of selected states (empty = show all).
+  const [dotFilters, setDotFilters] = useState<Record<string, Set<DotState>>>({});
+  const toggleDotFilter = (slug: string, state: DotState) =>
+    setDotFilters((prev) => {
+      const next = new Set(prev[slug] ?? []);
+      next.has(state) ? next.delete(state) : next.add(state);
+      return { ...prev, [slug]: next };
+    });
+
   // BULK — zaznaczanie wierszy do obróbki jako nazwana lista.
   const [selRows, setSelRows] = useState<Row[]>([]);
   const [bulkMarkets, setBulkMarkets] = useState<string[]>([]);
@@ -84,10 +94,21 @@ export default function ProductsTable() {
   }, [rows]);
 
   const visibleRows = useMemo(() => {
-    if (selectedCats.length === 0) return rows;
-    const set = new Set(selectedCats);
-    return rows.filter((r) => set.has(r.kind));
-  }, [rows, selectedCats]);
+    let result = rows;
+    if (selectedCats.length > 0) {
+      const set = new Set(selectedCats);
+      result = result.filter((r) => set.has(r.kind));
+    }
+    for (const [slug, states] of Object.entries(dotFilters)) {
+      if (states.size === 0) continue;
+      result = result.filter((r) => {
+        const s = r.statuses?.[slug];
+        const state: DotState = s?.active ? 'active' : s?.listed ? 'listed' : 'none';
+        return states.has(state);
+      });
+    }
+    return result;
+  }, [rows, selectedCats, dotFilters]);
 
   // One clickable colored-dot cell per marketplace (click → dedicated CRUD route).
   const makeDotCell = useCallback((slug: string, name: string) =>
@@ -95,14 +116,20 @@ export default function ProductsTable() {
       if (!data) return null;
       const s = data.statuses?.[slug];
       const state = s?.active ? 'active' : s?.listed ? 'listed' : 'none';
-      const label = state === 'active' ? 'aktywne' : state === 'listed' ? 'wystawione' : 'nie wystawione';
+      const isPublished = state !== 'none';
+      const title = isPublished
+        ? `${name}: ${state === 'active' ? 'aktywne' : 'wystawione'} — kliknij, aby edytować`
+        : `${name}: brak oferty — kliknij, aby wystawić`;
+      const href = isPublished
+        ? `/products/${data.id}/${CRUD_ROUTE[slug]}?edit=1`
+        : `/products/${data.id}/${CRUD_ROUTE[slug]}`;
       return (
         <button
-          onClick={() => router.push(`/products/${data.id}/${CRUD_ROUTE[slug]}`)}
-          title={`${name}: ${label} — kliknij, aby wystawić/edytować`}
+          onClick={() => router.push(href)}
+          title={title}
           className="flex items-center justify-center h-full w-full"
         >
-          <span className={`w-3 h-3 rounded-full ${DOT_CLS[state]} ${state !== 'none' ? 'ring-2 ring-offset-1 ring-white shadow' : ''}`} />
+          <span className={`w-3 h-3 rounded-full ${DOT_CLS[state]} ${isPublished ? 'ring-2 ring-offset-1 ring-white shadow' : ''}`} />
         </button>
       );
     }, [router]);
@@ -210,6 +237,53 @@ export default function ProductsTable() {
         onToggle={(v) => setSelectedCats((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]))}
         onClear={() => setSelectedCats([])}
       />
+
+      {/* Dot filters */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {MARKETPLACES.map((m) => {
+          const active = dotFilters[m.slug] ?? new Set<DotState>();
+          return (
+            <div key={m.slug} className="flex items-center gap-1">
+              <span className="text-xs font-semibold text-gray-500 w-4">{m.badge}</span>
+              {([
+                { state: 'active' as DotState, cls: 'bg-green-500', title: 'Aktywne' },
+                { state: 'listed' as DotState, cls: 'bg-amber-400', title: 'Wystawione' },
+                { state: 'none' as DotState, cls: 'bg-gray-200', title: 'Brak' },
+              ]).map(({ state, cls, title }) => (
+                <button
+                  key={state}
+                  type="button"
+                  title={`${m.name}: ${title}`}
+                  onClick={() => toggleDotFilter(m.slug, state)}
+                  className={clsx(
+                    'w-4 h-4 rounded-full transition-all',
+                    cls,
+                    active.has(state)
+                      ? 'ring-2 ring-offset-1 ring-indigo-500 scale-125'
+                      : 'opacity-40 hover:opacity-80',
+                  )}
+                />
+              ))}
+            </div>
+          );
+        })}
+        {Object.values(dotFilters).some((s) => s.size > 0) && (
+          <button
+            type="button"
+            onClick={() => setDotFilters({})}
+            className="text-xs text-gray-400 hover:text-gray-600 underline"
+          >
+            wyczyść filtry
+          </button>
+        )}
+
+        {/* Legend */}
+        <div className="ml-auto flex items-center gap-3 text-xs text-gray-400">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> aktywne</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> wystawione</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-200 inline-block" /> brak</span>
+        </div>
+      </div>
 
       <div className="flex items-center justify-end">
         <div className="text-sm text-gray-500">
