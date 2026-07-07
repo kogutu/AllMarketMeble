@@ -8,7 +8,6 @@ interface AccountOfferRow {
   allegro_offer_id: string | null;
   status: string;
   published_at: string | null;
-  marketplace: string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -69,7 +68,7 @@ export async function GET(req: NextRequest) {
     if (offers.length > 0) {
       const offerIds = offers.map((o) => o.id);
       const allAccountOffers = await query<AccountOfferRow>(
-        `SELECT offer_id, account_id, allegro_offer_id, status, published_at, marketplace
+        `SELECT offer_id, account_id, allegro_offer_id, status, published_at
          FROM allegro_offer_accounts
          WHERE offer_id IN (${offerIds.map(() => '?').join(',')})`,
         offerIds

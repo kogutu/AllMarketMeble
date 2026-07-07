@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const offer = await getLiveOffer(allegroOfferId, accountId);
+    console.log('[allegro/offer] raw description:', JSON.stringify((offer as Record<string, unknown>).description).slice(0, 500));
     const formData = mapAllegroOfferToFormData(offer);
+    console.log('[allegro/offer] mapped description:', (formData as Record<string, unknown>).description?.toString().slice(0, 300));
     return NextResponse.json({ formData, raw: offer });
   } catch (error) {
     return NextResponse.json(
@@ -67,12 +69,19 @@ function mapAllegroOfferToFormData(offer: Record<string, unknown>): Record<strin
   const stock = offer.stock as Record<string, unknown> | undefined;
   const quantity = Number(stock?.available ?? 1);
 
-  // Images
-  const images = ((offer.images as { url?: string }[] | undefined) || [])
-    .map((img) => img.url).filter(Boolean) as string[];
+  // Images — Allegro returns plain string[] of URLs (not objects)
+  const rawImages = (offer.images as unknown[] | undefined) || [];
+  const images = rawImages
+    .map(img => typeof img === 'string' ? img : (img as { url?: string }).url ?? '')
+    .filter(Boolean) as string[];
 
-  // Description — Allegro uses sections format
-  const description = extractDescription(offer.description);
+  // Preserve Allegro's native sections structure, but split TEXT items that embed
+  // <img> tags into separate TEXT + IMAGE items so the block editor renders them correctly.
+  const rawDesc = (offer.description ?? (product as Record<string, unknown> | undefined)?.description) as
+    { sections?: { items?: { type?: string; content?: string; url?: string }[] }[] } | null | undefined;
+  const description = (rawDesc && typeof rawDesc === 'object' && Array.isArray(rawDesc.sections))
+    ? JSON.stringify({ sections: rawDesc.sections.map(expandSection) })
+    : '';
 
   // Delivery
   const delivery = offer.delivery as Record<string, unknown> | undefined;
@@ -110,16 +119,34 @@ function mapAllegroOfferToFormData(offer: Record<string, unknown>): Record<strin
   };
 }
 
-function extractDescription(desc: unknown): string {
-  if (!desc || typeof desc !== 'object') return '';
-  const sections = (desc as { sections?: unknown[] }).sections || [];
-  const texts: string[] = [];
-  for (const section of sections) {
-    const items = (section as { items?: unknown[] }).items || [];
-    for (const item of items) {
-      const text = (item as { content?: string; type?: string }).content;
-      if (text) texts.push(text);
+type RawItem = { type?: string; content?: string; url?: string };
+type OutItem = { type: 'TEXT'; content: string } | { type: 'IMAGE'; url: string };
+
+/** Splits a section's TEXT items that embed <img> tags into separate TEXT/IMAGE items. */
+function expandSection(section: { items?: RawItem[] }): { items: OutItem[] } {
+  const out: OutItem[] = [];
+  const IMG_RE = /<img[^>]+src=["']([^"']+)["'][^>]*\/?>/gi;
+
+  for (const item of section.items ?? []) {
+    if (item.type === 'IMAGE' && item.url) {
+      out.push({ type: 'IMAGE', url: item.url });
+      continue;
     }
+    if (item.type !== 'TEXT' || !item.content) continue;
+
+    // Split TEXT content on <img> tags → interleave TEXT and IMAGE items
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    IMG_RE.lastIndex = 0;
+    while ((match = IMG_RE.exec(item.content)) !== null) {
+      const before = item.content.slice(lastIndex, match.index).trim();
+      if (before) out.push({ type: 'TEXT', content: before });
+      out.push({ type: 'IMAGE', url: match[1] });
+      lastIndex = match.index + match[0].length;
+    }
+    const tail = item.content.slice(lastIndex).trim();
+    if (tail) out.push({ type: 'TEXT', content: tail });
   }
-  return texts.join('\n\n');
+
+  return { items: out.length > 0 ? out : [{ type: 'TEXT', content: '' }] };
 }

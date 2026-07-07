@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { getJob, lastSync } from '@/lib/marketplaces/sync';
+import { getJob, lastSync, setJob } from '@/lib/marketplaces/sync';
 
 interface JobRow { marketplace: string; status: string; processed: number; total: number; message: string | null; started_at: string | null; updated_at: string }
 
@@ -16,4 +16,11 @@ export async function GET(req: NextRequest) {
   }
   const [job, last] = await Promise.all([getJob(slug), lastSync(slug)]);
   return NextResponse.json({ job, lastSync: last });
+}
+
+/** DELETE /api/marketplace/sync-status?slug=… → reset stuck sync job to idle */
+export async function DELETE(req: NextRequest) {
+  const slug = req.nextUrl.searchParams.get('slug') || 'empik';
+  await setJob(slug, { status: 'idle', message: 'Zresetowano ręcznie' });
+  return NextResponse.json({ reset: true, slug });
 }

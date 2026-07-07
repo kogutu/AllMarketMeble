@@ -172,14 +172,43 @@ export async function PATCH(
       [params.id, accountId]
     );
 
-    if (!row?.allegro_offer_id) {
+    let allegroOfferId = row?.allegro_offer_id ?? null;
+
+    // Fallback: allegro_offer_accounts may be missing — check marketplace_live_offers
+    if (!allegroOfferId) {
+      const offer = await queryOne<{ typesense_id: string }>(
+        'SELECT typesense_id FROM allegro_offers WHERE id = ?',
+        [params.id]
+      );
+      if (offer?.typesense_id) {
+        const live = await queryOne<{ ref: string; account_id: string }>(
+          `SELECT ref, account_id FROM marketplace_live_offers
+           WHERE marketplace = 'allegro' AND typesense_id = ?
+           ORDER BY synced_at DESC LIMIT 1`,
+          [offer.typesense_id]
+        );
+        if (live?.ref) {
+          allegroOfferId = live.ref;
+          // Backfill allegro_offer_accounts so next edit uses the fast path
+          await query(
+            `INSERT INTO allegro_offer_accounts (offer_id, typesense_id, account_id, allegro_offer_id, status, published_at)
+             VALUES (?, ?, ?, ?, 'active', NOW())
+             ON DUPLICATE KEY UPDATE
+               allegro_offer_id = VALUES(allegro_offer_id),
+               status = 'active',
+               updated_at = NOW()`,
+            [params.id, offer.typesense_id, accountId, allegroOfferId]
+          );
+        }
+      }
+    }
+
+    if (!allegroOfferId) {
       return NextResponse.json(
         { error: `Brak opublikowanej oferty dla konta ${accountId}` },
         { status: 404 }
       );
     }
-
-    const allegroOfferId = row.allegro_offer_id;
 
     // Persist updated form_data to DB
     await query(
@@ -187,7 +216,7 @@ export async function PATCH(
       [JSON.stringify(formData), params.id]
     );
 
-    const payload = await buildAllegroPayload(formData, accountId);
+    const payload = await buildAllegroPayload(formData, accountId, true);
     logger.debug('allegro payload edit offer', payload);
     await updateOffer(allegroOfferId, payload, accountId);
 

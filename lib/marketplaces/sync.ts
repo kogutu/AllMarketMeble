@@ -2,7 +2,7 @@ import { query } from '@/lib/db';
 import { matchProductsByField } from '@/lib/typesense';
 import { getAdapterBySlug } from '@/lib/marketplaces/registry';
 import { getMarketplace } from '@/lib/marketplaces/catalog';
-import { listAccountOffers, getLiveOffer, extractEanFromOffer } from '@/lib/allegro';
+import { listAccountOffers, extractEanFromOffer } from '@/lib/allegro';
 import { flatten } from '@/lib/marketplaces/flatten';
 import type { LiveOffersAdapter } from '@/lib/marketplaces/types';
 import type { MebleProduct } from '@/types';
@@ -132,40 +132,52 @@ export async function syncChunk(slug: string, offset: number, limit: number, run
   } else {
     const acc = accountId || 'default';
     const { offers, total } = await listAccountOffers(acc, offset, limit);
-    const details: { o: Record<string, unknown>; id: string; ean: string | null; price: number | null; quantity: number | null; title: string | null; active: boolean }[] = [];
-    for (let i = 0; i < offers.length; i += 3) {
-      const batch = offers.slice(i, i + 3) as Record<string, unknown>[];
-      const res = await Promise.all(batch.map(async (o) => {
-        const id = String((o as { id?: string }).id);
-        let ean: string | null = null;
-        let detail: Record<string, unknown> = o;
-        for (let a = 0; a < 3; a++) {
-          try { detail = await getLiveOffer(id, acc); ean = extractEanFromOffer(detail); break; }
-          catch (e) { if ((e as { response?: { status?: number } })?.response?.status === 429 && a < 2) { await sleep(1500 * (a + 1)); continue; } break; }
-        }
-        // Prefer the full detail for every value (the list endpoint is sparse).
-        const src = (detail && Object.keys(detail).length > 1 ? detail : o) as Record<string, unknown>;
-        const sm = (src as { sellingMode?: { price?: { amount?: string } } }).sellingMode;
-        return {
-          o: src, id, ean,
-          price: sm?.price?.amount != null ? Number(sm.price.amount) : null,
-          quantity: (src as { stock?: { available?: number } }).stock?.available ?? null,
-          title: (src as { name?: string }).name ?? null,
-          active: ((src as { publication?: { status?: string } }).publication?.status ?? '').toUpperCase() === 'ACTIVE',
-        };
-      }));
-      details.push(...res);
-      await sleep(120);
+
+    // Fast EAN resolution: no per-offer API calls.
+    // 1) Try external.id from the list response (often contains EAN/GTIN).
+    // 2) Fall back to previously cached EAN in our own DB.
+    const isEanLike = (v: unknown): v is string => typeof v === 'string' && /^\d{8,14}$/.test(v.trim());
+    const offerIds = offers.map((o) => String((o as { id?: string }).id ?? ''));
+    const listEans = new Map<string, string | null>(
+      offers.map((o) => {
+        const id = String((o as { id?: string }).id ?? '');
+        const ext = ((o as { external?: { id?: string } }).external)?.id;
+        return [id, isEanLike(ext) ? ext : null];
+      })
+    );
+
+    // Batch-load previously synced EANs from DB for offers still missing EAN.
+    const needDbLookup = offerIds.filter((id) => !listEans.get(id));
+    const dbEans = new Map<string, string>();
+    if (needDbLookup.length > 0) {
+      const ph = needDbLookup.map(() => '?').join(',');
+      const rows2 = await query<{ ref: string; ean: string }>(
+        `SELECT ref, ean FROM marketplace_live_offers WHERE marketplace='allegro' AND ref IN (${ph}) AND ean IS NOT NULL`,
+        needDbLookup
+      );
+      for (const r of rows2) dbEans.set(r.ref, r.ean);
     }
+
+    const details = offers.map((o) => {
+      const id = String((o as { id?: string }).id ?? '');
+      const ean = listEans.get(id) ?? dbEans.get(id) ?? null;
+      const sm = (o as { sellingMode?: { price?: { amount?: string } } }).sellingMode;
+      return {
+        o, id, ean,
+        price: sm?.price?.amount != null ? Number(sm.price.amount) : null,
+        quantity: (o as { stock?: { available?: number } }).stock?.available ?? null,
+        title: (o as { name?: string }).name ?? null,
+        active: ((o as { publication?: { status?: string } }).publication?.status ?? '').toUpperCase() === 'ACTIVE',
+      };
+    });
+
     const byEan = await matchProductsByField(COLLECTION, 'ean', details.map((d) => d.ean || '').filter(Boolean) as string[]);
     const rows: UpsertRow[] = details.map((d) => {
       const p = (d.ean && byEan.get(d.ean)) || null;
-      // Full offer detail + clean named parameters (param.<Nazwa>) for the grid.
-      const raw = { ...d.o, ...allegroParams(d.o) };
       return {
         marketplace: slug, ref: d.id, offer_id: d.id, ean: d.ean, typesense_id: p?.id ?? null,
         active: d.active, price: d.price, quantity: d.quantity, title: d.title, account_id: acc,
-        raw, base: p ? baseSnapshot(p) : null, meta: { ean: d.ean },
+        raw: d.o as Record<string, unknown>, base: p ? baseSnapshot(p) : null, meta: { ean: d.ean },
       };
     });
     await upsert(rows, syncedAt);

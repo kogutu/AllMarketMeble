@@ -399,6 +399,9 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
   const [shippingRates, setShippingRates] = useState<Record<string, { id: string; name: string }[]>>({});
   const [loadingShippingRates, setLoadingShippingRates] = useState(false);
 
+  // Tracks whether we already auto-fetched live data from Allegro in edit mode
+  const liveLoadedRef = useRef(false);
+
   // Auto-fill state
   const [needsAutoFill, setNeedsAutoFill] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
@@ -514,32 +517,26 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
 
   // ── Load draft on mount ────────────────────────────────────────────────────
   useEffect(() => {
+    let isCurrent = true;  // guards against StrictMode double-invocation and stale responses
     fetch(`/api/offers?typesense_id=${encodeURIComponent(product.id)}`)
       .then((r) => r.json())
       .then((data) => {
-        // Pick the Allegro-specific offer — product may have multiple offers (Allegro + Mirakl/Empik).
-        // Taking [0] (most recently updated) would load Mirakl form_data which has no `params`.
+        if (!isCurrent) return;
         const allOffers = (data.offers || []) as { marketplace?: string; form_data?: unknown; id: number; category_id?: string }[];
         const existing = allOffers.find((o) => !o.marketplace || o.marketplace === 'allegro') ?? allOffers[0];
 
-        // Load per-account published state for the Allegro offer specifically.
-        // data.accountOffers belongs to offers[0] — may be wrong if Mirakl was updated later.
-        // Use offerAccountsMap[existing.id] when available.
-        const allegroAccountOffers = existing
-          ? ((data.offerAccountsMap?.[existing.id] || data.accountOffers || []) as { account_id: string; allegro_offer_id: string; status: string; marketplace?: string }[])
-          : [];
-        if (allegroAccountOffers.length > 0) {
-          const map: Record<string, { allegroOfferId: string; status: string }> = {};
-          for (const ao of allegroAccountOffers) {
-            // marketplace column now included — filter strictly to allegro entries.
-            // Also guard by numeric offer ID (Mirakl uses SKU strings, Allegro uses numeric IDs).
-            const isAllegro = ao.marketplace === 'allegro' || (!ao.marketplace && /^\d+$/.test(ao.allegro_offer_id ?? ''));
-            if (ao.allegro_offer_id && isAllegro) {
-              map[ao.account_id] = { allegroOfferId: ao.allegro_offer_id, status: ao.status };
-            }
+        // Collect Allegro account entries across ALL offers for this product.
+        // Numeric allegroOfferId = Allegro, slug string = Mirakl.
+        const allAccountOffers = Object.values(
+          data.offerAccountsMap as Record<string, { account_id: string; allegro_offer_id: string; status: string }[]> || {}
+        ).flat();
+        const map: Record<string, { allegroOfferId: string; status: string }> = {};
+        for (const ao of allAccountOffers) {
+          if (ao.allegro_offer_id && /^\d+$/.test(ao.allegro_offer_id)) {
+            map[ao.account_id] = { allegroOfferId: ao.allegro_offer_id, status: ao.status };
           }
-          setPublishedAccounts(map);
         }
+        if (Object.keys(map).length > 0) setPublishedAccounts(map);
         if (existing) {
           let rawData: unknown = existing.form_data;
           if (typeof rawData === 'string') {
@@ -570,8 +567,9 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
           setNeedsAutoFill(true);
         }
       })
-      .catch(() => { initFromProduct(); setNeedsAutoFill(true); })
-      .finally(() => setLoadingDraft(false));
+      .catch(() => { if (isCurrent) { initFromProduct(); setNeedsAutoFill(true); } })
+      .finally(() => { if (isCurrent) setLoadingDraft(false); });
+    return () => { isCurrent = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
 
@@ -1034,8 +1032,8 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [loadingLive, setLoadingLive] = useState(false);
 
-  const handleLoadFromAllegro = async (accountId: string) => {
-    const allegroOfferId = publishedAccounts[accountId]?.allegroOfferId;
+  const handleLoadFromAllegro = async (accountId: string, overrideOfferId?: string) => {
+    const allegroOfferId = overrideOfferId ?? publishedAccounts[accountId]?.allegroOfferId;
     if (!allegroOfferId) { toast.error('Brak ID oferty Allegro'); return; }
     setLoadingLive(true);
     try {
@@ -1044,12 +1042,12 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
       );
       const d = await res.json();
       if (!res.ok) throw new Error(d.details || d.error || 'Błąd pobierania');
+      console.log('[AllegroForm] loaded description length:', d.formData?.description?.length, '| preview:', d.formData?.description?.slice(0, 80));
+      console.log('[AllegroForm] loaded images:', d.formData?.images?.length, d.formData?.images?.slice(0, 2));
       setForm((prev) => ({
         ...prev,
         ...d.formData,
-        // Keep our categoryName if Allegro doesn't return it
         categoryName: d.formData.categoryName || prev.categoryName,
-        // Merge params — live Allegro data takes priority
         params: { ...prev.params, ...(d.formData.params || {}) },
       }));
       draftRestoredRef.current = true;
@@ -1060,6 +1058,36 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
       setLoadingLive(false);
     }
   };
+
+  // Auto-load live data from Allegro when entering edit mode.
+  useEffect(() => {
+    if (!editMode) return;
+    if (liveLoadedRef.current) return;
+    if (loadingDraft) return;
+
+    // First try publishedAccounts (populated from allegro_offer_accounts)
+    const entry = Object.entries(publishedAccounts).find(
+      ([, pub]) => /^\d+$/.test(pub.allegroOfferId)
+    );
+    if (entry) {
+      liveLoadedRef.current = true;
+      handleLoadFromAllegro(entry[0]);
+      return;
+    }
+
+    // Fallback: query marketplace_live_offers directly — allegro_offer_accounts may be missing
+    liveLoadedRef.current = true;
+    fetch(`/api/allegro/offer-id?typesense_id=${encodeURIComponent(String(product.id))}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.allegroOfferId) return;
+        const accountId = d.accountId || 'default';
+        setPublishedAccounts({ [accountId]: { allegroOfferId: d.allegroOfferId, status: 'active' } });
+        handleLoadFromAllegro(accountId, d.allegroOfferId);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode, publishedAccounts, loadingDraft]);
 
   const handleEdit = async (accountId: string) => {
     if (!offerId) { toast.error('Najpierw zapisz draft!'); return; }
@@ -1303,13 +1331,13 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-medium text-gray-700 mr-1">AI:</span>
           {/* In edit mode — fetch live data from Allegro first (primary action).
-              Only show for accounts that exist in the Allegro accounts list (not Mirakl slugs). */}
+              Allegro offer IDs are always numeric; Mirakl uses slug strings — filter by that. */}
           {Object.entries(publishedAccounts)
-            .filter(([accId]) => accounts.some((a) => a.account_id === accId))
+            .filter(([, pub]) => /^\d+$/.test(pub.allegroOfferId))
             .length > 0 && (
             <div className="flex gap-1.5">
               {Object.entries(publishedAccounts)
-                .filter(([accId]) => accounts.some((a) => a.account_id === accId))
+                .filter(([, pub]) => /^\d+$/.test(pub.allegroOfferId))
                 .map(([accId, pub]) => (
                   <button
                     key={accId}
@@ -1762,7 +1790,10 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
             )}
           </div>
 
-          {/* Parametry kategorii */}
+        </div>
+
+        {/* ── Right column — params ── */}
+        <div className="space-y-5">
           {form.categoryId && (
             <div className="card p-5 space-y-4">
               <div className="flex items-center justify-between">
@@ -1814,20 +1845,20 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
             </div>
           )}
         </div>
-
-        {/* ── Right column ── */}
-        <div className="space-y-5">
-          <DescriptionEditor
-            value={form.description}
-            onChange={(v) => setField('description', v)}
-          />
-          <ImageGalleryPicker
-            allImages={galleryImages}
-            selected={form.images}
-            onChange={(imgs) => setField('images', imgs)}
-          />
-        </div>
       </div>
+
+      {/* ── Full-width: opis + zdjęcia ── */}
+      <DescriptionEditor
+        value={form.description}
+        onChange={(v) => setField('description', v)}
+        galleryImages={galleryImages}
+      />
+
+      <ImageGalleryPicker
+        allImages={galleryImages}
+        selected={form.images}
+        onChange={(imgs) => setField('images', imgs)}
+      />
 
       {/* Bottom action bar */}
       <div className="card p-4 flex items-center justify-between gap-3 flex-wrap">

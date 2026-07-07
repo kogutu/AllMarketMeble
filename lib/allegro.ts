@@ -951,7 +951,7 @@ async function findCatalogProduct(
 
 // Build Allegro offer payload for POST /sale/product-offers.
 // All category-specific parameters come from formData.params (paramId → value/values).
-export async function buildAllegroPayload(formData: Record<string, unknown>, accountId = 'default'): Promise<Record<string, unknown>> {
+export async function buildAllegroPayload(formData: Record<string, unknown>, accountId = 'default', isUpdate = false): Promise<Record<string, unknown>> {
   const data = formData as {
     title: string;
     sku: string;
@@ -1087,17 +1087,18 @@ export async function buildAllegroPayload(formData: Record<string, unknown>, acc
     },
   };
 
+  // When updating an existing offer Allegro rejects changes to product-level parameters
+  // (they are bound to the catalog product and immutable after creation).
+  // Send productSet only on create; on update skip it to avoid 422 DictionaryParameterIdNotFound.
+  const productSetField = isUpdate ? {} : { productSet: [productSetEntry] };
 
   return {
-    productSet: [productSetEntry],
+    ...productSetField,
     name: data.title,
-    description: {
-      sections: [{
-        items: [{ type: 'TEXT', content: sanitizeAllegroDescription(data.description) }],
-      }],
-    },
+    description: parseOrBuildDescription(data.description || ''),
     parameters: offerParams,
-    images: imageUrls,
+    // On update: omit images when empty so Allegro keeps the existing gallery (sending [] would delete all images)
+    ...(isUpdate && imageUrls.length === 0 ? {} : { images: imageUrls }),
     external: {
       id: data.sku
     },
@@ -1118,4 +1119,31 @@ export async function buildAllegroPayload(formData: Record<string, unknown>, acc
     },
     ...(Object.keys(afterSalesServices).length > 0 ? { afterSalesServices } : {}),
   };
+}
+
+/** Returns Allegro description payload.
+ *  If value is our JSON-serialized sections format, use it directly (preserves images).
+ *  Otherwise wrap plain HTML as a single TEXT item. */
+function parseOrBuildDescription(value: string): { sections: unknown[] } {
+  // Try native sections JSON (stored by DescriptionEditor / mapAllegroOfferToFormData)
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed?.sections && Array.isArray(parsed.sections) && parsed.sections.length > 0) {
+      // Sanitize TEXT items, pass IMAGE items through unchanged
+      const sections = (parsed.sections as { items: { type: string; content?: string; url?: string }[] }[])
+        .map(s => ({
+          items: s.items.map(item =>
+            item.type === 'TEXT'
+              ? { type: 'TEXT', content: sanitizeAllegroDescription(item.content || '') }
+              : item
+          ),
+        }))
+        .filter(s => s.items.length > 0);
+      if (sections.length > 0) return { sections };
+    }
+  } catch {}
+
+  // Fallback: plain HTML or empty — wrap as single TEXT section
+  const sanitized = sanitizeAllegroDescription(value);
+  return { sections: [{ items: [{ type: 'TEXT', content: sanitized }] }] };
 }
