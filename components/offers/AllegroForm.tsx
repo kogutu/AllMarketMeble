@@ -316,6 +316,22 @@ function furnitureSearchPhrase(product: TyreProduct): string {
 
 // ─── Param pre-fill from product data ────────────────────────────────────────
 
+const INSTRUCTIONS_URL = 'https://www.mebel-partner.pl/media/tkaniny_podstawy/INSTRUKCJA%20U%C5%BBYTKOWANIA%20-%20v%201.0.pdf';
+
+/** Force-sets params that must always have a specific value, regardless of draft state. */
+function forceFixedParams(categoryParams: AllegroParamDef[], ean: string): Record<string, string | string[]> {
+  const result: Record<string, string | string[]> = {};
+  for (const p of categoryParams) {
+    const n = p.name.toLowerCase();
+    if ((n.includes('nr katalogowy') || n.includes('numer katalogowy')) && ean) {
+      result[p.id] = ean;
+    } else if (n.includes('certyfikaty i instrukcje') || n.includes('gprs')) {
+      result[p.id] = INSTRUCTIONS_URL;
+    }
+  }
+  return result;
+}
+
 function prefillParamsFromProduct(
   categoryParams: AllegroParamDef[],
   product: TyreProduct
@@ -592,12 +608,15 @@ export default function AllegroForm({ product, onPublished, accountPrices }: Pro
         const seen = new Set(prodParams.map((p) => p.id));
         const merged = [...prodParams, ...offerParams.filter((p) => !seen.has(p.id))];
         setCategoryParams(merged);
-        // Pre-fill from product only on fresh category selection (not draft restore)
-        if (!draftRestoredRef.current) {
-          const prefilled = prefillParamsFromProduct(merged, product);
-          setForm((prev) => ({ ...prev, params: { ...prefilled, ...prev.params } }));
-        }
+        const fixed = forceFixedParams(merged, product.ean || '');
+        const wasDraftRestored = draftRestoredRef.current;
         draftRestoredRef.current = false;
+        setForm((prev) => {
+          const base = wasDraftRestored
+            ? prev.params
+            : { ...prefillParamsFromProduct(merged, product), ...prev.params };
+          return { ...prev, params: { ...base, ...fixed } };
+        });
       })
       .catch(() => setCategoryParams([]))
       .finally(() => {

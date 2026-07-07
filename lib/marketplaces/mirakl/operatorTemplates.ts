@@ -36,8 +36,10 @@ export const OPERATOR_TEMPLATES: Record<string, OperatorTemplate> = {
     staticValuesPath: path.join(DM, 'empik', 'attr_properties.json'),
     requiredPath: path.join(DM, 'empik', 'wymagane_pola.json'),
     fields: { sku: 'CATALOG_CODE', title: 'PELNY_TYTUL', description: 'OPIS_PRODUKTU_PELNY', ean: 'EAN' },
-    valueFormat: 'code',
-    multiSep: ',',
+    // Empik XLSX template oczekuje ETYKIET (nie kodów API Mirakl) — attr_properties.json zawiera etykiety.
+    valueFormat: 'label',
+    // Standard Mirakl dla wielu wartości w jednej komórce XLSX to | (nie ,).
+    multiSep: '|',
   },
   brw: {
     templatePath: process.env.BRW_TEMPLATE_PATH || path.join(DM, 'brw', 'szablon_brw.xlsx'),
