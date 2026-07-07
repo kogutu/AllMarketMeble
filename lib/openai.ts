@@ -247,8 +247,11 @@ Zasady dla "params":
     const content = response.output_text || '{}';
     const parsed = JSON.parse(content);
 
+    // Never let AI override these — managed deterministically elsewhere
     delete parsed.categoryId;
     delete parsed.categoryName;
+    delete parsed.images;
+    delete parsed.description;
 
     return parsed;
   } catch {

@@ -72,9 +72,10 @@ function norm(s: string): string {
     .replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-/** Compact product record shared by the title and attribute prompts. */
+/** Compact product record shared by the title and attribute prompts.
+ *  gallery_images intentionally excluded — MEDIA attributes are populated deterministically
+ *  by imageDefaults() in the form, not by AI, to prevent URL corruption. */
 function productRecord(product: MebleProduct) {
-  const gallery = product.gallery_images?.length ? product.gallery_images : (product.img ? [product.img] : []);
   return {
     name: product.name,
     subtitle: product.subtitle,
@@ -85,7 +86,6 @@ function productRecord(product: MebleProduct) {
     color: product.color,
     description: (product.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 2500),
     attrs: product.attrs,
-    gallery_images: gallery,
   };
 }
 
@@ -175,8 +175,7 @@ Zasady:
 - Dla type=LIST/LIST_MULTIPLE_VALUES: użyj DOKŁADNIE code z listy dozwolonych wartości (nie etykiety).
 - Dla [MULTI]: wartość = tablica code.
 - Dla type tekstowych/liczbowych: zwykły string.
-- Dla type=MEDIA: wstaw URL zdjęcia z gallery_images. Główne = gallery_images[0]; kolejne
-  "Dodatkowe zdjęcia (n)" = gallery_images[n] po kolei. Atrybutów certyfikatów/GPSR (np. AGHL) NIE wypełniaj zdjęciami.
+- Dla type=MEDIA: POMIŃ — nie wypełniaj atrybutów zdjęciowych, zostaną uzupełnione osobno.
 - Wypełnij KAŻDY atrybut, dla którego da się ustalić wartość (zwłaszcza kolor i materiał). Pomiń tylko te naprawdę nieokreślone (poza [WYMAGANY]).`;
 
   const parsed = parseJson<{ description?: string; attributes?: Record<string, string | string[]> }>(await ask(prompt, 3000));
