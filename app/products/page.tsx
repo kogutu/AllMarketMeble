@@ -9,13 +9,37 @@ import clsx from 'clsx';
 import { MebleProduct } from '@/types';
 import ProductCard from '@/components/products/ProductCard';
 import ProductsTable from '@/components/products/ProductsTable';
-import CategoryChips, { type CategoryOption } from '@/components/products/CategoryChips';
+import { type CategoryOption } from '@/components/products/CategoryChips';
 import Pagination from '@/components/ui/Pagination';
 import { MarginRule, matchMargin, applyMargin } from '@/lib/margins';
 import { PriceOverride } from '@/app/api/prices/route';
 import { listMarketplaces } from '@/lib/marketplaces/catalog';
 
 const MARKETPLACES = listMarketplaces();
+
+const CATEGORY_TREE = [
+  { id: '151', name: 'Biurka' },
+  { id: '368', name: 'Biurka Gamingowe' },
+  { id: '370', name: 'Biurka Regulowane' },
+  { id: '42',  name: 'Fotele biurowe obrotowe' },
+  { id: '52',  name: 'Fotele wypoczynkowe' },
+  { id: '365', name: 'Sofy wypoczynkowe' },
+  { id: '53',  name: 'Krzesła' },
+  { id: '51',  name: 'Hokery barowe' },
+  { id: '55',  name: 'Stoliki i ławy kawowe' },
+  { id: '364', name: 'Konsole' },
+  { id: '373', name: 'Szafki' },
+  { id: '54',  name: 'Stoły' },
+  { id: '58',  name: 'Meble tapicerowane' },
+  { id: '320', name: 'Meble systemowe skrzyniowe' },
+  { id: '85',  name: 'Pufy i ławki' },
+  { id: '84',  name: 'Regały Skandynawskie' },
+  { id: '110', name: 'Wieszaki' },
+  { id: '56',  name: 'Dywany' },
+  { id: '381', name: 'Materace' },
+  { id: '382', name: 'Łóżka tapicerowane' },
+  { id: '384', name: 'Meble z wysyłką za 1zł' },
+];
 
 interface AllegroAccount {
   account_id: string;
@@ -75,9 +99,10 @@ export default function ProductsPage() {
       else toast.error(d.error || 'Błąd dodawania do kolejki');
     } finally { setBulkBusy(false); }
   };
-  // Category filter (raw Typesense `cats` values, e.g. "151_biurka").
+  // Category filter — selected category ID from CATEGORY_TREE (e.g. "151").
+  // categoryOptions from facets is used to map ID → exact `cats` value for Typesense filter.
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   // Persist the chosen view across sessions.
   useEffect(() => {
@@ -173,10 +198,11 @@ export default function ProductsPage() {
         // Allegro per-account filter (local published records).
         if (allegroAccountFilterRef.current) addIdFilter(Object.keys(offerStatusRef.current), true);
 
-        // Category filter (raw `cats` values, array-contains).
-        if (categoryFilterRef.current.length) {
-          const vals = categoryFilterRef.current.map((v) => '`' + v.replace(/`/g, '') + '`').join(',');
-          filters.push(`cats:=[${vals}]`);
+        // Category filter — map selected category ID to the exact `cats` value (id_slug format).
+        if (categoryFilterRef.current) {
+          const id = categoryFilterRef.current;
+          const catsVal = categoryOptionsRef.current.find((o) => o.value.startsWith(`${id}_`))?.value ?? `${id}`;
+          filters.push(`cats:=[\`${catsVal}\`]`);
         }
 
         if (filters.length) params.set('filterBy', filters.join(' && '));
@@ -214,12 +240,14 @@ export default function ProductsPage() {
   const mpFilterRef = useRef(mpFilter);
   const listedIdsRef = useRef(listedIds);
   const categoryFilterRef = useRef(categoryFilter);
+  const categoryOptionsRef = useRef(categoryOptions);
 
   useEffect(() => { offerStatusRef.current = offerStatus; }, [offerStatus]);
   useEffect(() => { allegroAccountFilterRef.current = allegroAccountFilter; }, [allegroAccountFilter]);
   useEffect(() => { mpFilterRef.current = mpFilter; }, [mpFilter]);
   useEffect(() => { listedIdsRef.current = listedIds; }, [listedIds]);
   useEffect(() => { categoryFilterRef.current = categoryFilter; }, [categoryFilter]);
+  useEffect(() => { categoryOptionsRef.current = categoryOptions; }, [categoryOptions]);
 
   // Re-fetch from the first page whenever the category selection changes.
   useEffect(() => {
@@ -320,9 +348,9 @@ export default function ProductsPage() {
           <span>
             {viewMode === 'table' ? 'Widok tabeli — cały katalog' : loading ? 'Ładowanie...' : `Znaleziono: ${total.toLocaleString('pl')} produktów`}
           </span>
-          {viewMode === 'cards' && (search || seasonFilter || conditionFilter || Object.values(mpFilter).some(Boolean) || allegroAccountFilter || categoryFilter.length > 0) && (
+          {viewMode === 'cards' && (search || seasonFilter || conditionFilter || Object.values(mpFilter).some(Boolean) || allegroAccountFilter || categoryFilter) && (
             <button
-              onClick={() => { setSearch(''); setSeasonFilter(''); setConditionFilter(''); setMpFilter({}); setAllegroAccountFilter(''); setCategoryFilter([]); setPage(1); }}
+              onClick={() => { setSearch(''); setSeasonFilter(''); setConditionFilter(''); setMpFilter({}); setAllegroAccountFilter(''); setCategoryFilter(''); setPage(1); }}
               className="text-allegro hover:underline"
             >
               Wyczyść filtry
@@ -331,15 +359,19 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Główny filtr kategorii — zwijane chipsy (dotyczy widoku kart; tabela ma własny) */}
-      {viewMode === 'cards' && (
-        <CategoryChips
-          options={categoryOptions}
-          selected={categoryFilter}
-          onToggle={(v) => setCategoryFilter((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]))}
-          onClear={() => setCategoryFilter([])}
-        />
-      )}
+      {/* Filtr kategorii — select */}
+      <div className="px-1">
+        <select
+          className="input w-64 text-sm"
+          value={categoryFilter}
+          onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
+        >
+          <option value="">Wszystkie kategorie</option>
+          {CATEGORY_TREE.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
 
       {viewMode === 'table' ? (
         <ProductsTable />
