@@ -70,6 +70,7 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
   const autoFillRef = useRef(false);
   const aiDisabledRef = useRef(false); // true = odtworzono draft → nie odpalaj AI automatycznie
   const lastSavedCatRef = useRef('');
+  const categoryMappingRef = useRef<Record<string, string>>({});
 
   const operator = OPERATOR;
   const hasAccounts = accounts.length > 0;
@@ -85,6 +86,10 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
         if (accs[0]) setAccountId(accs[0].account_id);
         else setAccountId(OPERATOR);
       })
+      .catch(() => {});
+    fetch(`/api/mirakl/category-mapping?operator=${OPERATOR}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.mapping) categoryMappingRef.current = d.mapping; })
       .catch(() => {});
   }, []);
 
@@ -127,6 +132,7 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
   const BRAND = process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || 'Mebel-Partner';
   const isBrandAttr = (a: Attribute) => /producent|marka|brand/i.test(a.code) || /producent|marka/i.test(a.label);
   const isSetAttr = (a: Attribute) => /zestaw|komplet/i.test(`${a.code} ${a.label}`);
+  const isMiraklCatAttr = (a: Attribute) => /miraklcategory|mirakl.?category|struktura.*gold/i.test(a.code);
 
   // Wymagane atrybuty wypełniane deterministycznie z danych formularza (po etykietach):
   //  pełny tytuł ← tytuł, opis ← opis, numer katalogowy ← EAN/SKU, stawka VAT ← kod „23%”.
@@ -164,6 +170,23 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
   const brandDefaults = (attrs: Attribute[]): Record<string, string> => {
     const out: Record<string, string> = {};
     for (const a of attrs) if (isBrandAttr(a)) out[a.code] = brandValueFor(a);
+    return out;
+  };
+
+  /** Zwraca wartość miraklCategory z mappingu category_id → value (brwmapping_category.json).
+   *  Przechodzi przez wszystkie product.cats aż znajdzie mapping. */
+  const categoryDefaults = (attrs: Attribute[]): Record<string, string> => {
+    const catValue = (product.cats ?? [])
+      .map((c) => c.split('_')[0])
+      .map((id) => categoryMappingRef.current[id])
+      .find(Boolean);
+    if (!catValue) return {};
+    const out: Record<string, string> = {};
+    for (const a of attrs) {
+      if (!isMiraklCatAttr(a) || !a.values?.length) continue;
+      const match = a.values.find((v) => v.code === catValue || v.label === catValue) ?? a.values[0];
+      if (match) out[a.code] = match.code;
+    }
     return out;
   };
 
@@ -206,7 +229,13 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
           ...imageDefaults(attrs),
           ...requiredDefaults(attrs, { title: f.title, description: f.description, ean: f.ean, sku: f.sku }),
         };
-        return { ...f, attributes: { ...defaults, ...f.attributes } };
+        return {
+          ...f, attributes: {
+            ...defaults,
+            ...f.attributes,           // draft może nadpisać defaults
+            ...categoryDefaults(attrs), // miraklCategory ZAWSZE z mappingu — nadpisuje draft
+          },
+        };
       });
       setAttrsLoadedFor(code);
     } finally {
@@ -276,6 +305,8 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
             ...imageDefaults(attributes),
             // Wymagane pola deterministyczne mają pierwszeństwo nad (czasem pustym) wynikiem AI.
             ...requiredDefaults(attributes, { title, description, ean: f.ean, sku: f.sku }),
+            // Kategoria Mirakl (miraklCategory/STR_GOLD) — zawsze z listy, AI nie musi jej znać.
+            ...categoryDefaults(attributes),
           },
         };
       });

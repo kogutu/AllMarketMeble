@@ -74,3 +74,7 @@
 {"timestamp":"2026-07-07T10:09:34.914Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6948028"}}
 {"timestamp":"2026-07-07T10:09:35.066Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"233139801"}}
 {"timestamp":"2026-07-07T10:09:35.066Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"biurko_hana_dąb,_podstawa_dąb","productImportId":"6948028","offerImportId":"233139801","status":"pending"}}}
+{"timestamp":"2026-07-11T08:35:57.721Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"sofa_bergen_niebieska_welur,_podstawa_dąb-naturalny","status":"error","raw":{"missingAttributes":["VAT_VALUE"]}}}}
+{"timestamp":"2026-07-11T08:36:45.386Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6996688"}}
+{"timestamp":"2026-07-11T08:36:45.540Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"234250813"}}
+{"timestamp":"2026-07-11T08:36:45.540Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"sofa_bergen_niebieska_welur,_podstawa_dąb-naturalny","productImportId":"6996688","offerImportId":"234250813","status":"pending"}}}

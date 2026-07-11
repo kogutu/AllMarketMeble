@@ -61,6 +61,7 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   const [loadingAttrs, setLoadingAttrs] = useState(false);
+  const categoryMappingRef = useRef<Record<string, string>>({});
   const [draftId, setDraftId] = useState<number | null>(null);
   const [publishedRef, setPublishedRef] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,6 +91,10 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
         if (accs[0]) setAccountId(accs[0].account_id);
         else setAccountId(OPERATOR); // operate via env credentials
       })
+      .catch(() => {});
+    fetch(`/api/mirakl/category-mapping?operator=${OPERATOR}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.mapping) categoryMappingRef.current = d.mapping; })
       .catch(() => {});
   }, []);
 
@@ -137,6 +142,7 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
   // Producent/Marka zawsze = nasza marka (z .env DEFAULT_PRODUCENT_MARKA).
   const BRAND = process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || 'Mebel-Partner';
   const isBrandAttr = (a: Attribute) => /producent|marka|brand/i.test(a.code) || /producent|marka/i.test(a.label);
+  const isGoldCatAttr = (a: Attribute) => a.code === 'STR_GOLD' || /struktura.*gold|gold.*struktura/i.test(a.label);
   const isSetAttr = (a: Attribute) => /zestaw|komplet/i.test(`${a.code} ${a.label}`);
 
   // Wymagane atrybuty wypełniane deterministycznie z danych formularza (po etykietach — działa też dla BRW):
@@ -175,6 +181,23 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
   const brandDefaults = (attrs: Attribute[]): Record<string, string> => {
     const out: Record<string, string> = {};
     for (const a of attrs) if (isBrandAttr(a)) out[a.code] = brandValueFor(a);
+    return out;
+  };
+
+  /** Zwraca wartość STR_GOLD z mappingu category_id → str_gold (empik_mapping_category.json).
+   *  Przechodzi przez wszystkie product.cats (format "151_biurka" → "151") aż znajdzie mapping. */
+  const categoryDefaults = (attrs: Attribute[]): Record<string, string> => {
+    const strGoldValue = (product.cats ?? [])
+      .map((c) => c.split('_')[0])
+      .map((id) => categoryMappingRef.current[id])
+      .find(Boolean);
+    if (!strGoldValue) return {};
+    const out: Record<string, string> = {};
+    for (const a of attrs) {
+      if (!isGoldCatAttr(a) || !a.values?.length) continue;
+      const match = a.values.find((v) => v.code === strGoldValue || v.label === strGoldValue) ?? a.values[0];
+      if (match) out[a.code] = match.code;
+    }
     return out;
   };
 
@@ -217,7 +240,13 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
           ...imageDefaults(attrs),
           ...requiredDefaults(attrs, { title: f.title, description: f.description, ean: f.ean, sku: f.sku }),
         };
-        return { ...f, attributes: { ...defaults, ...f.attributes } };
+        return {
+          ...f, attributes: {
+            ...defaults,
+            ...f.attributes,           // draft może nadpisać defaults
+            ...categoryDefaults(attrs), // STR_GOLD ZAWSZE z mappingu — nadpisuje draft
+          },
+        };
       });
       setAttrsLoadedFor(code);
     } finally {
@@ -287,6 +316,8 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
             ...imageDefaults(attributes),
             // Wymagane pola deterministyczne mają pierwszeństwo nad (czasem pustym) wynikiem AI.
             ...requiredDefaults(attributes, { title, description, ean: f.ean, sku: f.sku }),
+            // STR_GOLD (kategoria GOLD) — zawsze z listy, AI nie musi jej znać.
+            ...categoryDefaults(attributes),
           },
         };
       });
@@ -346,6 +377,23 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
     const invalid = a.required && isAttrEmpty(a);
     const cls = `input${invalid ? ' border-red-400 ring-1 ring-red-200' : ''}${!isAttrEmpty(a) ? ' is-filled' : ''}`;
     if (a.values && a.values.length > 0) {
+      // STR_GOLD (kategoria GOLD) — duży select z wieloma widocznymi wierszami
+      if (isGoldCatAttr(a)) {
+        const val = (form.attributes[a.code] as string) || '';
+        return (
+          <select
+            className={`${cls} w-full text-sm`}
+            size={Math.min(10, a.values.length)}
+            value={val}
+            onChange={(e) => setAttr(a.code, e.target.value)}
+          >
+            <option value="">— wybierz —</option>
+            {a.values.map((v) => (
+              <option key={v.code} value={v.code}>{v.label}</option>
+            ))}
+          </select>
+        );
+      }
       return (
         <SearchSelect className={cls} options={a.values}
           value={(form.attributes[a.code] as string) || ''}
@@ -648,9 +696,18 @@ export default function EmpikOfferForm({ product }: { product: MebleProduct }) {
           <h4 className="text-xs font-semibold text-gray-500 uppercase">Atrybuty kategorii</h4>
           <div className="grid grid-cols-2 gap-3">
             {attributes.map((a) => (
-              <div key={a.code} id={`attr-${a.code}`}>
-                <label className="label">
-                  {a.label}{a.required && <span className="text-red-500"> *</span>}
+              <div key={a.code} id={`attr-${a.code}`} className={isGoldCatAttr(a) ? 'col-span-2' : ''}>
+                <label className="label flex items-center gap-2 flex-wrap">
+                  <span>{a.label}{a.required && <span className="text-red-500"> *</span>}</span>
+                  {isGoldCatAttr(a) && (() => {
+                    const matched = (product.cats ?? []).map((c) => c.split('_')[0]).find((id) => categoryMappingRef.current[id]);
+                    return (
+                      <span className="text-xs text-gray-400 font-normal font-mono">
+                        cats: [{(product.cats || []).join(', ')}]
+                        {' → '}{matched ? `id:${matched} → ${categoryMappingRef.current[matched]}` : '(brak mappingu)'}
+                      </span>
+                    );
+                  })()}
                 </label>
                 {renderAttr(a)}
               </div>

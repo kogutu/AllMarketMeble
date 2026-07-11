@@ -284,6 +284,7 @@ export default function EmpikGrid() {
         exportName={`${SLUG}-oferty`}
         heightClass="h-[calc(100vh-150px)]"
         rowHeight={64}
+        pagination={false}
       />
       <p className="text-xs text-gray-400 mt-1">
         Edytuj komórki <b>Cena {mpLabel}</b> / <b>Ilość {mpLabel}</b> aby wypchnąć zmianę na marketplace.
