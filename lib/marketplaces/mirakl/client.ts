@@ -94,12 +94,21 @@ export class MiraklClient {
     const key = `mirakl:${this.operator.id}:attrs:${hierarchyCode ?? 'all'}`;
     const cached = cacheGet<unknown[]>(key);
     if (cached) return cached;
-    const res = await this.api.get(EP.attributes, {
-      params: hierarchyCode ? { hierarchy: hierarchyCode, max: 1000 } : { max: 1000 },
-    });
-    const result = (res.data?.attributes ?? res.data ?? []) as unknown[];
-    cacheSet(key, result);
-    return result;
+    // Paginate — some operators (BRW) return >1000 attributes including classificationstore ones.
+    const PAGE = 500;
+    const all: unknown[] = [];
+    let offset = 0;
+    while (true) {
+      const res = await this.api.get(EP.attributes, {
+        params: { ...(hierarchyCode ? { hierarchy: hierarchyCode } : {}), max: PAGE, offset },
+      });
+      const page = (res.data?.attributes ?? res.data ?? []) as unknown[];
+      all.push(...page);
+      if (page.length < PAGE) break;
+      offset += PAGE;
+    }
+    cacheSet(key, all);
+    return all;
   }
 
   async getValuesList(code: string): Promise<{ code: string; label: string }[]> {

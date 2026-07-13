@@ -176,7 +176,10 @@ Zasady:
 - Dla [MULTI]: wartość = tablica code.
 - Dla type tekstowych/liczbowych: zwykły string.
 - Dla type=MEDIA: POMIŃ — nie wypełniaj atrybutów zdjęciowych, zostaną uzupełnione osobno.
-- Wypełnij KAŻDY atrybut, dla którego da się ustalić wartość (zwłaszcza kolor i materiał). Pomiń tylko te naprawdę nieokreślone (poza [WYMAGANY]).`;
+- KOLORY (kolor, kolor_siedziska, kolor_obicia, kolor_ramy itp.): ZAWSZE wypełnij na podstawie nazwy produktu, koloru, opisu. Jeśli nazwa zawiera "beżowy", użyj "beżowy". Dobierz DOKŁADNIE jeden code z listy dozwolonych wartości.
+- MATERIAŁY (mat_obicia, mat_ramy itp.): ZAWSZE wypełnij z nazwy/opisu. Przykłady: jeśli produkt to sofa tapicerowana tkaniną → mat_obicia="tkanina"; jeśli ma metalowe nogi → mat_ramy="metal"; jeśli drewniana rama → mat_ramy="drewno". Użyj DOKŁADNIE code z listy dozwolonych.
+- liczba_sztuk_w_komplecie: ZAWSZE wypełnij — domyślnie "1" jeśli to pojedynczy produkt, lub liczba elementów zestawu. Użyj code z listy (np. "1", "2", "4" itp.).
+- Wypełnij KAŻDY atrybut [WYMAGANY] nawet jeśli musisz zgadnąć na podstawie kontekstu. Nie pomijaj wymaganych pól.`;
 
   const parsed = parseJson<{ description?: string; attributes?: Record<string, string | string[]> }>(await ask(prompt, 3000));
   const attrs = parsed?.attributes || {};

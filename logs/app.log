@@ -78,3 +78,24 @@
 {"timestamp":"2026-07-11T08:36:45.386Z","level":"info","message":"mirakl importProducts","data":{"operator":"empik","importId":"6996688"}}
 {"timestamp":"2026-07-11T08:36:45.540Z","level":"info","message":"mirakl importOffers","data":{"operator":"empik","importId":"234250813"}}
 {"timestamp":"2026-07-11T08:36:45.540Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"empik","kind":"mirakl","outcome":{"ref":"sofa_bergen_niebieska_welur,_podstawa_dąb-naturalny","productImportId":"6996688","offerImportId":"234250813","status":"pending"}}}
+{"timestamp":"2026-07-13T07:53:24.355Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"233398"}}
+{"timestamp":"2026-07-13T07:53:24.528Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4623085"}}
+{"timestamp":"2026-07-13T07:53:24.528Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"fotel_isla_beżowy_welur,_podstawa_złoty","productImportId":"233398","offerImportId":"4623085","status":"pending"}}}
+{"timestamp":"2026-07-13T08:55:41.184Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"233435"}}
+{"timestamp":"2026-07-13T08:55:41.364Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4623578"}}
+{"timestamp":"2026-07-13T08:55:41.365Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"fotel_isla_beżowy_welur,_podstawa_złoty","productImportId":"233435","offerImportId":"4623578","status":"pending"}}}
+{"timestamp":"2026-07-13T09:26:04.391Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"233445"}}
+{"timestamp":"2026-07-13T09:26:04.576Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4623822"}}
+{"timestamp":"2026-07-13T09:26:04.576Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"fotel_isla_beżowy_welur,_podstawa_złoty","productImportId":"233445","offerImportId":"4623822","status":"pending"}}}
+{"timestamp":"2026-07-13T09:46:33.869Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"233455"}}
+{"timestamp":"2026-07-13T09:46:34.072Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4623988"}}
+{"timestamp":"2026-07-13T09:46:34.073Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"fotel_isla_beżowy_welur,_podstawa_złoty","productImportId":"233455","offerImportId":"4623988","status":"pending"}}}
+{"timestamp":"2026-07-13T09:52:02.178Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"233460"}}
+{"timestamp":"2026-07-13T09:52:02.357Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4624026"}}
+{"timestamp":"2026-07-13T09:52:02.357Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"fotel_isla_beżowy_welur,_podstawa_złoty","productImportId":"233460","offerImportId":"4624026","status":"pending"}}}
+{"timestamp":"2026-07-13T10:00:48.262Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"233465"}}
+{"timestamp":"2026-07-13T10:00:48.445Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4624084"}}
+{"timestamp":"2026-07-13T10:00:48.445Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"fotel_isla_beżowy_welur,_podstawa_złoty","productImportId":"233465","offerImportId":"4624084","status":"pending"}}}
+{"timestamp":"2026-07-13T10:13:00.584Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"233476"}}
+{"timestamp":"2026-07-13T10:13:00.761Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4624199"}}
+{"timestamp":"2026-07-13T10:13:00.761Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"fotel_isla_beżowy_welur,_podstawa_złoty","productImportId":"233476","offerImportId":"4624199","status":"pending"}}}

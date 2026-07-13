@@ -92,15 +92,17 @@ export class MiraklAdapter implements MarketplaceAdapter, LiveOffersAdapter {
           required: Boolean(a.required),
           multiple: type === 'LIST_MULTIPLE_VALUES',
         };
-        const vlCode = a.type_parameter ?? a.type_parameters?.values_list_id;
-        if (LIST_TYPES.has(type) && vlCode) {
-          attr.values = await this.client.getValuesList(vlCode).catch(() => []);
-        }
-        // Atrybuty bez listy w API (np. STR_GOLD) — uzupełnij ze statycznej konfiguracji,
-        // żeby renderowały się jako SELECT zamiast pola tekstowego.
-        if (!attr.values || attr.values.length === 0) {
-          const stat = getStaticValues(this.operator, a.code);
-          if (stat.length) attr.values = stat;
+        // Dla operatorów szablonowych (Empik/BRW) statyczna lista wartości z pliku konfiguracji
+        // ma PIERWSZEŃSTWO nad listą z API — plik jest źródłem prawdy dla importu XLSX.
+        // Dla pozostałych operatorów: najpierw API, potem statyczna jako fallback.
+        const stat = getStaticValues(this.operator, a.code);
+        if (stat.length) {
+          attr.values = stat;
+        } else {
+          const vlCode = a.type_parameter ?? a.type_parameters?.values_list_id;
+          if (LIST_TYPES.has(type) && vlCode) {
+            attr.values = await this.client.getValuesList(vlCode).catch(() => []);
+          }
         }
         return attr;
       })
@@ -122,6 +124,9 @@ export class MiraklAdapter implements MarketplaceAdapter, LiveOffersAdapter {
     const tpl = operatorTemplate(this.operator);
     const useLabel = tpl?.valueFormat === 'label';   // BRW oczekuje etykiet, Empik kodów
     const sep = tpl?.multiSep ?? ',';
+    // BRW nie akceptuje wielokrotnych wartości (np. "beżowy|złoty") w żadnym atrybucie LIST —
+    // zawsze bierzemy tylko pierwszą dopasowaną wartość.
+    const forceFirstOnly = this.operator === 'brw';
     // lowercase + usuń diakrytyki + traktuj -/_ jak spację + zwiń spacje
     const norm = (s: string) => s.toLowerCase()
       .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l')
@@ -144,7 +149,8 @@ export class MiraklAdapter implements MarketplaceAdapter, LiveOffersAdapter {
       }
       if (fixed.length === 0) { delete record[a.code]; continue; }
       // Atrybut pojedynczy → jedna wartość; wielokrotny → wartości rozdzielone separatorem operatora.
-      record[a.code] = a.multiple ? fixed.join(sep) : fixed[0];
+      // BRW: nigdy nie łącz wartości — zawsze pierwsza.
+      record[a.code] = (!forceFirstOnly && a.multiple) ? fixed.join(sep) : fixed[0];
     }
   }
 

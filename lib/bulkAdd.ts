@@ -214,14 +214,75 @@ async function processMirakl(item: BulkItem, operator: 'empik' | 'brw'): Promise
     body: JSON.stringify({ productId, operator, accountId, categoryCode: cat.categoryCode, categoryLabel: cat.categoryLabel, collection: item.collection }),
   });
 
-  // Minimalny, spójny z formularzem MiraklFormData kształt szkicu (resztę uzupełni przegląd w formularzu).
-  const prod = await api<{ hits?: Record<string, unknown>[] } & Record<string, unknown>>(`/api/products/${encodeURIComponent(productId)}?collection=${encodeURIComponent(item.collection)}`).catch(() => null);
+  const prod = await api<Record<string, unknown>>(`/api/products/${encodeURIComponent(productId)}?collection=${encodeURIComponent(item.collection)}`).catch(() => null);
   const p = (prod as { product?: Record<string, unknown> })?.product || (prod as Record<string, unknown>) || {};
+  const attrs = (p.attrs || {}) as Record<string, unknown>;
+  const cats = (p.cats as string[] | undefined) ?? [];
+
+  let aiAttributes = { ...(fill.attributes || {}) };
+
+  if (operator === 'brw') {
+    // 1) Kategoria miraklCategory z mappingu
+    const mapping = await api<{ mapping?: Record<string, string> }>(`/api/mirakl/category-mapping?operator=brw`).catch(() => ({ mapping: {} }));
+    const map: Record<string, string> = mapping.mapping ?? {};
+    const miraklCatValue = cats.map((c) => c.split('_')[0]).map((id) => map[id]).find(Boolean);
+
+    // 2) Wymagane classificationstore atrybuty których API nie zwraca
+    const catPath = miraklCatValue || cat.categoryLabel || '';
+    const reqData = catPath
+      ? await api<{ attributes?: { code: string; values?: { code: string }[] }[] }>(`/api/mirakl/required-attrs?operator=brw&categoryPath=${encodeURIComponent(catPath)}`).catch(() => ({ attributes: [] }))
+      : { attributes: [] };
+    const reqAttrs = reqData.attributes ?? [];
+
+    // 3) Normalizacja — dopasuj do dozwolonych wartości (pierwsza pasująca)
+    const norm = (s: string) => (s || '').toLowerCase()
+      .replace(/ą/g,'a').replace(/ć/g,'c').replace(/ę/g,'e').replace(/ł/g,'l')
+      .replace(/ń/g,'n').replace(/ó/g,'o').replace(/ś/g,'s').replace(/[źż]/g,'z')
+      .replace(/[^a-z0-9]+/g,' ').trim();
+    const bestMatch = (values: { code: string }[], search: string): string | undefined => {
+      if (!values.length || !search) return undefined;
+      const q = norm(search);
+      return values.find((v) => norm(v.code) === q)?.code
+        ?? values.find((v) => q.includes(norm(v.code)) && norm(v.code).length >= 3)?.code
+        ?? values.find((v) => norm(v.code).includes(q) && q.length >= 3)?.code;
+    };
+    const str = (k: string) => String(attrs[k] ?? '');
+    const mainColor = String((p.color as Record<string,unknown>)?.name ?? attrs.kolor ?? '');
+    const INSTRUKCJA_URL = 'https://www.mebel-partner.pl/media/tkaniny_podstawy/INSTRUKCJA%20U%C5%BBYTKOWANIA%20-%20v%201.0.pdf';
+
+    // 4) Deterministyczne defaults (nadpisują AI)
+    const deterministic: Record<string, string> = {};
+
+    if (miraklCatValue) deterministic['pimcore-model-attribute-miraklCategory'] = miraklCatValue;
+
+    for (const a of reqAttrs) {
+      const c = a.code; const vals = a.values ?? [];
+      if (/key-kolor$/.test(c)) { const v = bestMatch(vals, mainColor); if (v) deterministic[c] = v; }
+      else if (/key-kolor_siedziska/.test(c)) { const v = bestMatch(vals, str('kolor_siedziska') || mainColor); if (v) deterministic[c] = v; }
+      else if (/key-kolor_obicia/.test(c)) { const v = bestMatch(vals, str('kolor_obicia') || mainColor); if (v) deterministic[c] = v; }
+      else if (/key-kolor_ramy/.test(c)) { const v = bestMatch(vals, str('kolor_ramy') || mainColor); if (v) deterministic[c] = v; }
+      else if (/key-mat_obicia/.test(c)) { const v = bestMatch(vals, str('mat_obicia') || str('tkanina')); if (v) deterministic[c] = v; }
+      else if (/key-mat_ramy/.test(c)) {
+        const n = `${p.name} ${p.description || ''}`.toLowerCase();
+        const guess = /drewn|dąb|sosn|orzech/i.test(n) ? 'drewno' : /metal|stal|chrom/i.test(n) ? 'metal' : str('mat_ramy');
+        const v = bestMatch(vals, guess); if (v) deterministic[c] = v;
+      }
+      else if (/key-liczba_sztuk_w_komplecie/.test(c)) {
+        const qty = str('liczba_sztuk_w_komplecie') || '1';
+        deterministic[c] = vals.find((x) => x.code === qty)?.code ?? '1';
+      }
+      else if (/pdfInstruction/.test(c)) { const v = str('instrukcja_montazu'); if (v) deterministic[c] = v; }
+      else if (/safetyAndOperating/.test(c)) { deterministic[c] = str('instrukcja_uzytkowania') || INSTRUKCJA_URL; }
+    }
+
+    aiAttributes = { ...aiAttributes, ...deterministic };
+  }
+
   const form = {
     sku: String(p.sku || productId), ean: String(p.ean || ''),
     categoryCode: cat.categoryCode, categoryLabel: cat.categoryLabel || cat.categoryCode,
     title: fill.title || String(p.name || ''), description: fill.description || '',
-    attributes: fill.attributes || {}, quantity: 1, condition: 'NEW',
+    attributes: aiAttributes, quantity: 1, condition: 'NEW',
     price: Number(p.price_gross ?? p.finalprice ?? 0), operator,
   };
 

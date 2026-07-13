@@ -137,6 +137,20 @@ export async function searchProducts(
   const client = getTypesenseClient();
   const { q = '*', page = 1, perPage = 20, filterBy, sortBy, facetBy } = params;
 
+  // Typesense hard limit: per_page ≤ 250. For larger requests, fan out into multiple pages.
+  const TS_MAX = 250;
+  if (perPage > TS_MAX) {
+    const pages = Math.ceil(perPage / TS_MAX);
+    const chunks = await Promise.all(
+      Array.from({ length: pages }, (_, i) =>
+        searchProducts(collection, { ...params, page: (page - 1) * pages + i + 1, perPage: TS_MAX })
+      )
+    );
+    const hits = chunks.flatMap((c) => c.hits).slice(0, perPage);
+    const total = chunks[0]?.total ?? 0;
+    return { hits, total, page, perPage, totalPages: Math.ceil(total / perPage), facets: chunks[0]?.facets ?? [] };
+  }
+
   const searchParams: Record<string, unknown> = {
     q,
     query_by: 'name,model,sku,ean,subtitle',

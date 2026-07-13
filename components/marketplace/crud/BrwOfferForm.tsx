@@ -173,6 +173,26 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
     return out;
   };
 
+  const INSTRUKCJA_UZYTKOWANIA_URL = 'https://www.mebel-partner.pl/media/tkaniny_podstawy/INSTRUKCJA%20U%C5%BBYTKOWANIA%20-%20v%201.0.pdf';
+
+  /** Wypełnia pola dokumentów PDF z danych produktu (Typesense extra_json/attrs). */
+  const documentDefaults = (attrs: Attribute[]): Record<string, string> => {
+    const extra = (product as unknown as Record<string, unknown>);
+    const attrs_ = (product.attrs || {}) as Record<string, unknown>;
+    const montazu = String(extra.instrukcja_montazu ?? attrs_.instrukcja_montazu ?? '');
+    const uzytkowania = String(extra.instrukcja_uzytkowania ?? attrs_.instrukcja_uzytkowania ?? '') || INSTRUKCJA_UZYTKOWANIA_URL;
+    const out: Record<string, string> = {};
+    for (const a of attrs) {
+      const s = `${a.code} ${a.label}`;
+      if (/pdfInstruction|Instrukcja PDF/i.test(s)) {
+        if (montazu) out[a.code] = montazu;
+      } else if (/safetyAndOperating|bezpiecze[nń]stwa.*obs[łl]ugi/i.test(s)) {
+        out[a.code] = uzytkowania;
+      }
+    }
+    return out;
+  };
+
   /** Zwraca wartość miraklCategory z mappingu category_id → value (brwmapping_category.json).
    *  Przechodzi przez wszystkie product.cats aż znajdzie mapping. */
   const categoryDefaults = (attrs: Attribute[]): Record<string, string> => {
@@ -190,21 +210,106 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
     return out;
   };
 
+  /** Mapuje dane produktu na atrybuty BRW z normalizacją do listy dozwolonych wartości. */
+  const productDefaults = (attrs: Attribute[]): Record<string, string> => {
+    const norm = (s: string) => (s || '').toLowerCase()
+      .replace(/ą/g,'a').replace(/ć/g,'c').replace(/ę/g,'e').replace(/ł/g,'l')
+      .replace(/ń/g,'n').replace(/ó/g,'o').replace(/ś/g,'s').replace(/[źż]/g,'z')
+      .replace(/[^a-z0-9]+/g,' ').trim();
+    const bestMatch = (a: Attribute, search: string): string | undefined => {
+      if (!a.values?.length || !search) return undefined;
+      const q = norm(search);
+      return (
+        a.values.find((v) => norm(v.label) === q || norm(v.code) === q)?.code ??
+        a.values.find((v) => q.includes(norm(v.label)) && norm(v.label).length >= 3)?.code ??
+        a.values.find((v) => norm(v.label).includes(q) && q.length >= 3)?.code
+      );
+    };
+    const extra = (product.attrs || {}) as Record<string, unknown>;
+    const str = (k: string) => String(extra[k] ?? '');
+    const out: Record<string, string> = {};
+    // Kolor główny produktu — z danych koloru produktu
+    const mainColor = product.color?.name || str('kolor') || str('kolor_glowny');
+    // Kolor ramy — z atrybutów produktu
+    const frameColor = str('kolor_ramy') || str('kolor_podstawy') || str('kolor_nogi');
+
+    for (const a of attrs) {
+      const c = a.code;
+      if (/key-kolor$/.test(c)) {
+        const v = bestMatch(a, mainColor);
+        if (v) out[c] = v;
+      } else if (/key-kolor_siedziska/.test(c)) {
+        const v = bestMatch(a, str('kolor_siedziska') || mainColor);
+        if (v) out[c] = v;
+      } else if (/key-kolor_obicia/.test(c)) {
+        const v = bestMatch(a, str('kolor_obicia') || mainColor);
+        if (v) out[c] = v;
+      } else if (/key-kolor_ramy/.test(c)) {
+        const v = bestMatch(a, frameColor || mainColor);
+        if (v) out[c] = v;
+      } else if (/key-mat_obicia/.test(c)) {
+        const v = bestMatch(a, str('mat_obicia') || str('material_obicia') || str('tkanina'));
+        if (v) out[c] = v;
+      } else if (/key-mat_ramy/.test(c)) {
+        // Próbuj z atrybutów, potem wyciągnij z nazwy/opisu produktu
+        const fromAttrs = str('mat_ramy') || str('material_ramy') || str('material_nogi') || str('material');
+        const fromName = (() => {
+          const n = `${product.name} ${product.description || ''} ${Object.values(extra).join(' ')}`.toLowerCase();
+          if (/\bdrewn|\bdąb\b|\bsosn|\borzech\b|\bbuk\b|\bdrew/i.test(n)) return 'drewno';
+          if (/\bstal\b|\bchrom|\bmetal|\bsteel/i.test(n)) return 'metal';
+          if (/\bmdf\b/i.test(n)) return 'mdf';
+          if (/\bsklejk/i.test(n)) return 'sklejka';
+          if (/\btworzywo|\bplastik|\bpolipropylen/i.test(n)) return 'tworzywo sztuczne';
+          return '';
+        })();
+        const v = bestMatch(a, fromAttrs || fromName);
+        if (v) out[c] = v;
+      } else if (/key-liczba_sztuk_w_komplecie/.test(c)) {
+        // Liczba sztuk w komplecie — z atrybutu lub domyślnie 1
+        const qty = String(str('liczba_sztuk_w_komplecie') || str('ilosc_w_komplecie') || '1');
+        const v = a.values?.find((x) => String(x.code) === qty || String(x.label) === qty)?.code ?? '1';
+        out[c] = v;
+      } else if (/key-glebokosc_siedziska/.test(c)) {
+        const v = str('glebokosc_siedziska') || str('glebokosc_siedziska_cm');
+        if (v) out[c] = v;
+      } else if (/key-szerokosc_siedziska/.test(c)) {
+        const v = str('szerokosc_siedziska') || str('szerokosc_siedziska_cm');
+        if (v) out[c] = v;
+      }
+    }
+    return out;
+  };
+
   const gallery = product.gallery_images?.length ? product.gallery_images : (product.img ? [product.img] : []);
   const isCertMedia = (a: Attribute) => /aghl|certyfikat|gpsr|instrukcj/i.test(`${a.code} ${a.label}`);
   const additionalIndex = (a: Attribute): number | null => {
-    const m = `${a.code} ${a.label}`.match(/(?:dodatkow\w*\D*)(\d+)/i);
+    const s = `${a.code} ${a.label}`;
+    // "Dodatkowe zdjęcia N" (Empik) OR "Zdjęcia_N" / "photos_N" (BRW) OR anything ending _N / N
+    const m = s.match(/(?:dodatkow\w*\D*)(\d+)/i) ?? s.match(/(?:zdj\w*|photo\w*)[\s_](\d+)/i) ?? s.match(/_(\d+)\s*$/);
     return m ? parseInt(m[1]) : null;
   };
+  const isPhotoAttr = (a: Attribute) => /photos?_?\d|zdj\w*_?\d/i.test(`${a.code} ${a.label}`);
   const imageDefaults = (attrs: Attribute[]): Record<string, string> => {
     if (gallery.length === 0) return {};
     const out: Record<string, string> = {};
-    const media = attrs.filter((a) => a.type === 'MEDIA' && !isCertMedia(a));
-    const additional = media.filter((a) => additionalIndex(a) != null)
+    const media = attrs.filter((a) => a.type === 'MEDIA' && !isCertMedia(a) && isPhotoAttr(a));
+    const numbered = media.filter((a) => additionalIndex(a) != null)
       .sort((x, y) => (additionalIndex(x)! - additionalIndex(y)!));
-    const main = media.find((a) => additionalIndex(a) == null);
-    if (main && gallery[0]) out[main.code] = gallery[0];
-    additional.forEach((a, i) => { const img = gallery[i + 1]; if (img) out[a.code] = img; });
+    const unnumbered = media.filter((a) => additionalIndex(a) == null);
+
+    if (numbered.length > 0) {
+      // BRW-style: Zdjęcia_1…N — index 1 = gallery[0], index 2 = gallery[1], itd.
+      const base = additionalIndex(numbered[0])! - 1; // offset (zwykle 0 gdy zaczyna od _1)
+      numbered.forEach((a) => {
+        const idx = additionalIndex(a)! - 1 - base;
+        const img = gallery[idx];
+        if (img) out[a.code] = img;
+      });
+    }
+    // Empik-style: jeden "main" (bez indeksu) + "Dodatkowe N" (z indeksem) w numbered
+    if (unnumbered.length > 0) {
+      if (unnumbered[0] && gallery[0]) out[unnumbered[0].code] = gallery[0];
+    }
     return out;
   };
 
@@ -221,7 +326,20 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
     try {
       const res = await fetch(`/api/mirakl/categories/${encodeURIComponent(code)}/attributes?operator=${operator}&accountId=${accountId}`);
       const d = await res.json();
-      const attrs: Attribute[] = d.attributes || [];
+      const SKIP_ATTRS = new Set(['sku', 'product-id', 'product-id-type', 'price', 'state']);
+      let attrs: Attribute[] = (d.attributes || []).filter((a: Attribute) => !SKIP_ATTRS.has(a.code));
+
+      // Doładuj wymagane classificationstore atrybuty których API nie zwraca.
+      // Używamy aktualnej ścieżki kategorii (miraklCategory) z mappingu lub etykiety.
+      const catPath = categoryMappingRef.current[(product.cats ?? []).map(c => c.split('_')[0]).find(id => categoryMappingRef.current[id]) ?? ''] || form.categoryLabel;
+      if (catPath) {
+        const reqRes = await fetch(`/api/mirakl/required-attrs?operator=${operator}&categoryPath=${encodeURIComponent(catPath)}`);
+        const reqData = await reqRes.json();
+        const reqAttrs: Attribute[] = reqData.attributes || [];
+        const existing = new Set(attrs.map((a) => a.code));
+        attrs = [...attrs, ...reqAttrs.filter((a) => !existing.has(a.code))];
+      }
+
       setAttributes(attrs);
       setForm((f) => {
         const defaults = {
@@ -232,8 +350,10 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
         return {
           ...f, attributes: {
             ...defaults,
-            ...f.attributes,           // draft może nadpisać defaults
+            ...f.attributes,            // draft może nadpisać defaults
+            ...productDefaults(attrs),  // kolor/materiał/liczba_sztuk z produktu — nadpisują draft
             ...categoryDefaults(attrs), // miraklCategory ZAWSZE z mappingu — nadpisuje draft
+            ...documentDefaults(attrs), // instrukcje ZAWSZE z produktu — nadpisują draft
           },
         };
       });
@@ -305,8 +425,12 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
             ...imageDefaults(attributes),
             // Wymagane pola deterministyczne mają pierwszeństwo nad (czasem pustym) wynikiem AI.
             ...requiredDefaults(attributes, { title, description, ean: f.ean, sku: f.sku }),
+            // Kolor/materiał/liczba_sztuk z danych produktu (normalizowane do listy BRW).
+            ...productDefaults(attributes),
             // Kategoria Mirakl (miraklCategory/STR_GOLD) — zawsze z listy, AI nie musi jej znać.
             ...categoryDefaults(attributes),
+            // Instrukcje PDF — zawsze z produktu/domyślne.
+            ...documentDefaults(attributes),
           },
         };
       });

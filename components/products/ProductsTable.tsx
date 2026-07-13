@@ -12,7 +12,7 @@ import { listMarketplaces } from '@/lib/marketplaces/catalog';
 import type { MebleProduct } from '@/types';
 
 const MARKETPLACES = listMarketplaces();
-const PER_PAGE = 250;
+const PER_PAGE = 1000;
 
 type LiveStatus = { listed: boolean; active: boolean };
 type DotState = 'active' | 'listed' | 'none';

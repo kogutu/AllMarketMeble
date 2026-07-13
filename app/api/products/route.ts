@@ -12,6 +12,16 @@ export async function GET(req: NextRequest) {
   const facetBy = searchParams.get('facetBy') || undefined;
 
   try {
+    console.log(
+      {
+      q,
+      page,
+      perPage,
+      filterBy,
+      sortBy,
+      facetBy,
+    }
+    );
     const result = await searchProducts(collection, {
       q,
       page,
