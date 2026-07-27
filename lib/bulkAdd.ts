@@ -253,7 +253,10 @@ async function processMirakl(item: BulkItem, operator: 'empik' | 'brw'): Promise
     // 4) Deterministyczne defaults (nadpisują AI)
     const deterministic: Record<string, string> = {};
 
+    const brand = process.env.DEFAULT_PRODUCENT_MARKA || process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || 'Mebel-Partner';
     if (miraklCatValue) deterministic['pimcore-model-attribute-miraklCategory'] = miraklCatValue;
+    deterministic['pimcore-model-attribute-producer'] = brand;
+    deterministic['pimcore-classificationstore-key-marka'] = brand;
 
     for (const a of reqAttrs) {
       const c = a.code; const vals = a.values ?? [];

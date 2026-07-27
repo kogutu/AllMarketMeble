@@ -130,7 +130,7 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
 
   // Producent/Marka zawsze = nasza marka (z .env DEFAULT_PRODUCENT_MARKA).
   const BRAND = process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || 'Mebel-Partner';
-  const isBrandAttr = (a: Attribute) => /producent|marka|brand/i.test(a.code) || /producent|marka/i.test(a.label);
+  const isBrandAttr = (a: Attribute) => /produc[ae]nt?|marka|brand/i.test(a.code) || /producent|marka/i.test(a.label);
   const isSetAttr = (a: Attribute) => /zestaw|komplet/i.test(`${a.code} ${a.label}`);
   const isMiraklCatAttr = (a: Attribute) => /miraklcategory|mirakl.?category|struktura.*gold/i.test(a.code);
 
