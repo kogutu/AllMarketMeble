@@ -12,6 +12,10 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['mysql2'],
   },
+  // Ensure data_market files (XLSX templates, JSON value lists) are bundled in Vercel deployment
+  outputFileTracingIncludes: {
+    '**': ['./data_market/**/*', './szablon_empik.xlsx'],
+  },
 };
 
 module.exports = nextConfig;
