@@ -130,7 +130,7 @@ export default function Sidebar() {
         <div>
           <div className="text-sm font-bold text-gray-900">MarketPanel</div>
           <div className="text-xs text-gray-400">by ❤️ devback.it</div>
-          <div className="text-xs text-gray-400">v1.2.0</div>
+          <div className="text-xs text-gray-400">v1.2.2</div>
 
         </div>
 

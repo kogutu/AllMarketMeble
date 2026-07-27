@@ -127,12 +127,16 @@ export class MiraklAdapter implements MarketplaceAdapter, LiveOffersAdapter {
     // BRW nie akceptuje wielokrotnych wartości (np. "beżowy|złoty") w żadnym atrybucie LIST —
     // zawsze bierzemy tylko pierwszą dopasowaną wartość.
     const forceFirstOnly = this.operator === 'brw';
+    // Pola szablonu (sku/tytuł/opis/ean/producer) są ustawiane deterministycznie w buildProductRecord —
+    // nie przetwarzaj ich przez sanitizeValueLists (ich wartości nie podlegają walidacji listy).
+    const templateFieldCodes = new Set(tpl ? Object.values(tpl.fields).filter(Boolean) : []);
     // lowercase + usuń diakrytyki + traktuj -/_ jak spację + zwiń spacje
     const norm = (s: string) => s.toLowerCase()
       .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l')
       .replace(/ń/g, 'n').replace(/ó/g, 'o').replace(/ś/g, 's').replace(/[źż]/g, 'z')
       .replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
     for (const a of attrs) {
+      if (templateFieldCodes.has(a.code)) continue; // handled deterministically in buildProductRecord
       if (!a.values?.length) continue;
       const raw = record[a.code];
       if (raw == null || raw === '') continue;
