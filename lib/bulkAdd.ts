@@ -284,8 +284,8 @@ async function processMirakl(item: BulkItem, operator: 'empik' | 'brw'): Promise
         const qty = str('liczba_sztuk_w_komplecie') || '1';
         deterministic[c] = vals.find((x) => x.code === qty)?.code ?? '1';
       }
-      else if (/pdfInstruction/.test(c)) { const v = str('instrukcja_montazu'); if (v) deterministic[c] = v; }
-      else if (/safetyAndOperating/.test(c)) { deterministic[c] = str('instrukcja_uzytkowania') || INSTRUKCJA_URL; }
+      else if (/pdfInstruction/.test(c)) { const v = str('instrukcja_montazu'); if (v && /^https?:\/\//i.test(v)) deterministic[c] = v; }
+      else if (/safetyAndOperating/.test(c)) { const v = str('instrukcja_uzytkowania'); deterministic[c] = (v && /^https?:\/\//i.test(v)) ? v : INSTRUKCJA_URL; }
     }
 
     aiAttributes = { ...aiAttributes, ...deterministic };

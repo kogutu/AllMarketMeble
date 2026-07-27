@@ -179,8 +179,9 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
   const documentDefaults = (attrs: Attribute[]): Record<string, string> => {
     const extra = (product as unknown as Record<string, unknown>);
     const attrs_ = (product.attrs || {}) as Record<string, unknown>;
-    const montazu = String(extra.instrukcja_montazu ?? attrs_.instrukcja_montazu ?? '');
-    const uzytkowania = String(extra.instrukcja_uzytkowania ?? attrs_.instrukcja_uzytkowania ?? '') || INSTRUKCJA_UZYTKOWANIA_URL;
+    const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\//i.test(v);
+    const montazu = isUrl(extra.instrukcja_montazu) ? String(extra.instrukcja_montazu) : isUrl(attrs_.instrukcja_montazu) ? String(attrs_.instrukcja_montazu) : '';
+    const uzytkowania = isUrl(extra.instrukcja_uzytkowania) ? String(extra.instrukcja_uzytkowania) : isUrl(attrs_.instrukcja_uzytkowania) ? String(attrs_.instrukcja_uzytkowania) : INSTRUKCJA_UZYTKOWANIA_URL;
     const out: Record<string, string> = {};
     for (const a of attrs) {
       const s = `${a.code} ${a.label}`;
@@ -269,6 +270,14 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
         const qty = String(str('liczba_sztuk_w_komplecie') || str('ilosc_w_komplecie') || '1');
         const v = a.values?.find((x) => String(x.code) === qty || String(x.label) === qty)?.code ?? '1';
         out[c] = v;
+      } else if (/key-mozliwosc_rozkladania/.test(c)) {
+        // Domyślnie "nie" — produkty są nierozkładane o ile nie ma innej informacji
+        const fromAttrs = str('mozliwosc_rozkladania') || str('rozkkladana');
+        const v = bestMatch(a, fromAttrs || 'nie');
+        if (v) out[c] = v;
+      } else if (/key-mozliwosc_sztaplowania/.test(c)) {
+        const v = bestMatch(a, str('mozliwosc_sztaplowania') || 'nie');
+        if (v) out[c] = v;
       } else if (/key-glebokosc_siedziska/.test(c)) {
         const v = str('glebokosc_siedziska') || str('glebokosc_siedziska_cm');
         if (v) out[c] = v;
