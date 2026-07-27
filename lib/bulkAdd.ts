@@ -254,7 +254,17 @@ async function processMirakl(item: BulkItem, operator: 'empik' | 'brw'): Promise
     const deterministic: Record<string, string> = {};
 
     const brand = process.env.DEFAULT_PRODUCENT_MARKA || process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || 'Mebel-Partner';
-    if (miraklCatValue) deterministic['pimcore-model-attribute-miraklCategory'] = miraklCatValue;
+
+    // miraklCategory: z mappingu lub etykiety kategorii Mirakl (cat.categoryLabel = ścieżka BRW)
+    const finalCatValue = miraklCatValue || cat.categoryLabel || '';
+    if (finalCatValue) deterministic['pimcore-model-attribute-miraklCategory'] = finalCatValue;
+
+    // Zdjęcia z galerii produktu
+    const gallery: string[] = (p.gallery_images as string[] | undefined) ?? (p.img ? [p.img as string] : []);
+    for (let i = 0; i < Math.min(gallery.length, 15); i++) {
+      deterministic[`pimcore-model-attribute-photos_${i + 1}`] = gallery[i];
+    }
+
     deterministic['pimcore-model-attribute-producer'] = brand;
     deterministic['pimcore-classificationstore-key-marka'] = brand;
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enqueue, listQueue, clearQueue, deleteItem, deleteBatch, markPublished, kickWorker, setInternalBase } from '@/lib/bulkAdd';
+import { query } from '@/lib/db';
 
 /** GET /api/bulk-add — stan kolejki „Dodawane". */
 export async function GET(req: NextRequest) {
@@ -63,6 +64,9 @@ export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
     if (body?.action === 'published' && body?.id != null) await markPublished(Number(body.id));
+    if (body?.action === 'error' && body?.id != null) {
+      await query(`UPDATE bulk_add_queue SET status='error', error=? WHERE id=?`, [String(body.error || '').slice(0, 900), Number(body.id)]);
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to patch', details: String(error) }, { status: 500 });

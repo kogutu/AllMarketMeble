@@ -43,11 +43,14 @@ export default function BulkPage() {
       const ok = res.ok && (d.success || d.allegroOfferId);
       if (ok) {
         setPublished((p) => new Set(p).add(it.id));
-        // Trwałe oznaczenie „wystawione" — pomijane przy „Wystaw wszystkie" po odświeżeniu.
         fetch('/api/bulk-add', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: it.id, action: 'published' }) }).catch(() => {});
         if (!silent) toast.success(`Wystawiono: ${it.title || it.ean || it.typesense_id}`);
-      } else if (!silent) {
-        toast.error(`Błąd publikacji: ${d.details || d.error || 'nieznany'}`);
+      } else {
+        const errMsg = d.details || d.error || 'nieznany błąd';
+        // Zapisz błąd do DB i odśwież listę
+        fetch('/api/bulk-add', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: it.id, action: 'error', error: `Błąd publikacji: ${errMsg}` }) }).catch(() => {});
+        setItems((prev) => prev.map((i) => i.id === it.id ? { ...i, status: 'error', error: `Błąd publikacji: ${errMsg}` } : i));
+        if (!silent) toast.error(`Błąd: ${errMsg.slice(0, 120)}`);
       }
       return !!ok;
     } catch (e) {
@@ -152,14 +155,17 @@ export default function BulkPage() {
                 {g.items.map((it) => {
                   const st = STATUS_LABEL[it.status] || STATUS_LABEL.pending;
                   return (
-                    <tr key={it.id}>
+                    <tr key={it.id} className={it.status === 'error' ? 'bg-red-50' : ''}>
                       <td className="px-4 py-2">
                         <div className="font-medium text-gray-800 line-clamp-1">{it.title || it.ean || it.typesense_id}</div>
                         <div className="text-xs text-gray-400 font-mono">EAN: {it.ean || '—'}</div>
+                        {it.status === 'error' && it.error && (
+                          <div className="mt-1 text-xs text-red-600 font-medium break-words max-w-sm">{it.error}</div>
+                        )}
                       </td>
                       <td className="px-3 py-2 capitalize w-24">{it.marketplace}</td>
                       <td className="px-3 py-2 w-36"><span className={`text-xs px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span></td>
-                      <td className="px-3 py-2 text-xs text-gray-500 max-w-xs truncate" title={it.error || ''}>{it.error || ''}</td>
+                      <td className="px-3 py-2 w-8"></td>
                       <td className="px-4 py-2 text-right w-60">
                         <div className="flex items-center justify-end gap-2">
                           {(it.status === 'done' || it.status === 'published') && it.draft_id && (
