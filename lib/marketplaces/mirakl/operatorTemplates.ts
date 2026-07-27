@@ -9,7 +9,7 @@
  */
 import path from 'path';
 
-const DM = path.join(process.cwd(), 'data_market');
+const DM = path.join(process.cwd(), 'mirakl_data');
 
 export interface OperatorTemplate {
   /** Ścieżka do pliku szablonu XLSX wysyłanego do operatora. */
@@ -42,7 +42,7 @@ export const OPERATOR_TEMPLATES: Record<string, OperatorTemplate> = {
     multiSep: '|',
   },
   brw: {
-    templatePath: process.env.BRW_TEMPLATE_PATH || path.join(DM, 'brw', 'szablon_brw.xlsx'),
+    templatePath: process.env.BRW_TEMPLATE_PATH || path.join(process.cwd(), 'szablon_brw.xlsx'),
     staticValuesPath: path.join(DM, 'brw', 'dane_brw.json'),
     requiredPath: path.join(DM, 'brw', 'brw_req.json'),
     fields: {

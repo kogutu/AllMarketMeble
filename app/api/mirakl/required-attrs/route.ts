@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const DM = path.join(process.cwd(), 'data_market');
+const DM = path.join(process.cwd(), 'mirakl_data');
 
 function loadJson<T>(filePath: string): T | null {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T; } catch { return null; }

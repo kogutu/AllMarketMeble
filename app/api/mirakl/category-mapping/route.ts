@@ -3,8 +3,8 @@ import fs from 'fs';
 import path from 'path';
 
 const FILES: Record<string, string> = {
-  empik: path.join(process.cwd(), 'data_market', 'empik', 'empik_mapping_category.json'),
-  brw:   path.join(process.cwd(), 'data_market', 'brw',   'brwmapping_category.json'),
+  empik: path.join(process.cwd(), 'mirakl_data', 'empik', 'empik_mapping_category.json'),
+  brw:   path.join(process.cwd(), 'mirakl_data', 'brw',   'brwmapping_category.json'),
 };
 
 const cache = new Map<string, Record<string, string>>();

@@ -1,0 +1,558 @@
+{
+  "Dom i ogród/Meble/Akcesoria meblowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Atrapy kominków": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Barki i kredensy": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Fotele": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Kanapy, sofy": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Komody": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Konsole": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Krzesła/Hokery": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Krzesła/Krzesła": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Krzesła/Stołki i taborety": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Krzesła/Ławki": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Maskownice i osłony na kaloryfer": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Materace/Materace nawierzchniowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Materace/Materace piankowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Materace/Materace sprężynowe/Materace bonellowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Materace/Materace sprężynowe/Materace kieszeniowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Materace/Materace sprężynowe/Materace multipocket": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Meble biurowe/Biurka": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Meble biurowe/Fotele i krzesła biurowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Meble biurowe/Kasetki na pieniądze": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Meble biurowe/Kontenerki pod biurko": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Meble biurowe/Nadstawki na biurko": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Meble biurowe/Sejfy": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Meble biurowe/Sekretarzyki": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Meble kuchenne": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Meble łazienkowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Narożniki": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Okleiny meblowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Parawany": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Podnóżki i pufy": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Przechowywanie ubrań/Drabinki, schodki i podesty do garderoby": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Przechowywanie ubrań/Organizery do szaf": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Przechowywanie ubrań/Pojemniki i kosze do szaf": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Przechowywanie ubrań/Pokrowce na buty": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Przechowywanie ubrań/Pokrowce na ubrania": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Przechowywanie ubrań/Stojaki i wieszaki ubraniowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Przechowywanie ubrań/Wieszaki i półki na buty": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Przechowywanie ubrań/Wieszaki na ubrania": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Półki": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Regały": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Stojaki na parasole": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Stoły": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Szafki RTV": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Szafki i wieszaki na klucze": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Szafki na buty": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Szafki nocne": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Szafy": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Szezlongi": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Toaletki": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Witryny": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Worki i poduchy do siedzenia": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Wózki kuchenne": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Zestawy mebli/Zestawy mebli do jadalni": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Zestawy mebli/Zestawy mebli do przedpokoju": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Zestawy mebli/Zestawy mebli kuchennych": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Zestawy mebli/Zestawy mebli pokojowych": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Zestawy mebli/Zestawy mebli łazienkowych": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600"
+  ],
+  "Dom i ogród/Meble/Ławy i stoliki kawowe": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ],
+  "Dom i ogród/Meble/Łóżka": [
+    "STR_GOLD",
+    "CATALOG_CODE",
+    "PELNY_TYTUL",
+    "OPIS_PRODUKTU_PELNY",
+    "ZDJECIE_OKLADKI_PRZOD_DUZY",
+    "VAT_VALUE",
+    "600",
+    "34"
+  ]
+}
