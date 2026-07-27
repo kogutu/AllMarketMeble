@@ -72,6 +72,21 @@ export default function BulkPage() {
     return () => clearInterval(t);
   }, [load]);
 
+  const [retrying, setRetrying] = useState<Set<number>>(new Set());
+
+  const retryItem = async (it: Item) => {
+    setRetrying((p) => new Set(p).add(it.id));
+    try {
+      await fetch('/api/bulk-add', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: it.id, action: 'retry' }) });
+      setItems((prev) => prev.map((i) => i.id === it.id ? { ...i, status: 'pending', error: null } : i));
+      toast.success('Ponowiono — produkt wróci do kolejki');
+    } catch {
+      toast.error('Błąd ponowienia');
+    } finally {
+      setRetrying((p) => { const n = new Set(p); n.delete(it.id); return n; });
+    }
+  };
+
   const clear = async (scope: 'done' | 'all') => {
     await fetch(`/api/bulk-add?scope=${scope}`, { method: 'DELETE' });
     toast.success(scope === 'all' ? 'Wyczyszczono kolejkę' : 'Usunięto gotowe/wystawione');
@@ -167,19 +182,31 @@ export default function BulkPage() {
                       <td className="px-3 py-2 w-36"><span className={`text-xs px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span></td>
                       <td className="px-3 py-2 w-8"></td>
                       <td className="px-4 py-2 text-right w-60">
-                        <div className="flex items-center justify-end gap-2">
-                          {(it.status === 'done' || it.status === 'published') && it.draft_id && (
-                            <>
-                              <Link href={`/products/${it.typesense_id}/add-to-${it.marketplace}`} className="text-allegro hover:underline text-xs">Otwórz szkic</Link>
-                              {(it.status === 'published' || published.has(it.id)) ? (
-                                <span className="text-xs text-emerald-600 font-medium">✓ Wystawiono</span>
-                              ) : (
-                                <button onClick={() => publishItem(it)} disabled={publishing.has(it.id)}
-                                  className="btn-primary btn-sm text-xs disabled:opacity-50">
-                                  {publishing.has(it.id) ? '…' : 'Wystaw'}
-                                </button>
-                              )}
-                            </>
+                        <div className="flex items-center justify-end gap-2 flex-wrap">
+                          {it.draft_id && (
+                            <Link href={`/products/${it.typesense_id}/add-to-${it.marketplace}`}
+                              className="text-allegro hover:underline text-xs">
+                              Otwórz szkic
+                            </Link>
+                          )}
+                          {it.status === 'error' && (
+                            <button onClick={() => retryItem(it)} disabled={retrying.has(it.id)}
+                              className="btn-sm px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded border border-amber-200 hover:bg-amber-200 disabled:opacity-50">
+                              {retrying.has(it.id) ? '…' : '↺ Ponów'}
+                            </button>
+                          )}
+                          {it.status === 'done' && it.draft_id && (
+                            published.has(it.id) ? (
+                              <span className="text-xs text-emerald-600 font-medium">✓ Wystawiono</span>
+                            ) : (
+                              <button onClick={() => publishItem(it)} disabled={publishing.has(it.id)}
+                                className="btn-primary btn-sm text-xs disabled:opacity-50">
+                                {publishing.has(it.id) ? '…' : 'Wystaw'}
+                              </button>
+                            )
+                          )}
+                          {published.has(it.id) && (
+                            <span className="text-xs text-emerald-600 font-medium">✓ Wystawiono</span>
                           )}
                           <button onClick={() => removeItem(it.id)} title="Usuń z kolejki"
                             className="text-gray-300 hover:text-red-500 text-sm leading-none">✕</button>

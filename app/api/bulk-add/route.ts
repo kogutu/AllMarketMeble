@@ -67,6 +67,10 @@ export async function PATCH(req: NextRequest) {
     if (body?.action === 'error' && body?.id != null) {
       await query(`UPDATE bulk_add_queue SET status='error', error=? WHERE id=?`, [String(body.error || '').slice(0, 900), Number(body.id)]);
     }
+    if (body?.action === 'retry' && body?.id != null) {
+      await query(`UPDATE bulk_add_queue SET status='pending', error=NULL WHERE id=?`, [Number(body.id)]);
+      kickWorker();
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to patch', details: String(error) }, { status: 500 });
