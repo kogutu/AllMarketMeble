@@ -91,6 +91,11 @@ export async function buildProductRecord(
     if (!record[f.title]) record[f.title] = form.title || '';
     if (!record[f.description]) record[f.description] = form.description || '';
     if (!record[f.ean] && form.ean) record[f.ean] = form.ean;
+    if (f.producer && !record[f.producer]) {
+      record[f.producer] = process.env.DEFAULT_PRODUCENT_MARKA
+        || process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA
+        || 'Mebel-Partner';
+    }
     return record;
   }
 

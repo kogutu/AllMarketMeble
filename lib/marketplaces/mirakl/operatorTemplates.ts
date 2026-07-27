@@ -19,7 +19,7 @@ export interface OperatorTemplate {
   /** Plik z polami wymaganymi per kategoria (opcjonalny). */
   requiredPath?: string;
   /** Kody kolumn szablonu dla pól bazowych produktu. */
-  fields: { sku: string; title: string; description: string; ean: string };
+  fields: { sku: string; title: string; description: string; ean: string; producer?: string };
   /**
    * Format wartości atrybutów LIST w imporcie:
    *  - 'code'  → kod z listy wartości (Empik, np. „AAASR5"),
@@ -50,6 +50,7 @@ export const OPERATOR_TEMPLATES: Record<string, OperatorTemplate> = {
       title: 'pimcore-model-attribute-name[pl]',
       description: 'pimcore-model-attribute-description[pl]',
       ean: 'pimcore-model-attribute-ean',
+      producer: 'pimcore-model-attribute-producer',
     },
     // Import BRW oczekuje ETYKIET (np. „Biuro", „beżowy"), nie kodów listy wartości API (37296).
     // Etykiety bywają z przecinkiem („Salon, jadalnia"), więc separator wielu wartości to `|`, nie `,`.
