@@ -7,12 +7,34 @@ import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import DataGrid, { ImageCell } from '@/components/grid/DataGrid';
-import CategoryChips, { type CategoryOption } from '@/components/products/CategoryChips';
 import { listMarketplaces } from '@/lib/marketplaces/catalog';
 import type { MebleProduct } from '@/types';
 
 const MARKETPLACES = listMarketplaces();
 const PER_PAGE = 1000;
+
+const CATEGORY_TREE = [
+  { id: '42',  name: 'Fotele biurowe obrotowe' },
+  { id: '51',  name: 'Hokery barowe' },
+  { id: '52',  name: 'Fotele wypoczynkowe' },
+  { id: '53',  name: 'Krzesła' },
+  { id: '54',  name: 'Stoły' },
+  { id: '55',  name: 'Stoliki i ławy kawowe' },
+  { id: '56',  name: 'Dywany' },
+  { id: '58',  name: 'Meble tapicerowane' },
+  { id: '84',  name: 'Regały Skandynawskie' },
+  { id: '85',  name: 'Pufy i ławki' },
+  { id: '110', name: 'Wieszaki' },
+  { id: '151', name: 'Biurka' },
+  { id: '320', name: 'Meble systemowe skrzyniowe' },
+  { id: '364', name: 'Konsole' },
+  { id: '365', name: 'Sofy wypoczynkowe' },
+  { id: '368', name: 'Biurka Gamingowe' },
+  { id: '370', name: 'Biurka Regulowane' },
+  { id: '373', name: 'Szafki' },
+  { id: '381', name: 'Materace' },
+  { id: '382', name: 'Łóżka tapicerowane' },
+];
 
 type LiveStatus = { listed: boolean; active: boolean };
 type DotState = 'active' | 'listed' | 'none';
@@ -26,6 +48,7 @@ interface Row {
   price: number;
   qty: number;
   kind: string;
+  cats: string[];
   statuses: Record<string, LiveStatus>;
 }
 
@@ -55,7 +78,6 @@ export default function ProductsTable() {
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(0);
   const [total, setTotal] = useState(0);
-  const [selectedCats, setSelectedCats] = useState<string[]>([]);
   // Dot filters: per-marketplace set of selected states (empty = show all).
   const [dotFilters, setDotFilters] = useState<Record<string, Set<DotState>>>({});
   const toggleDotFilter = (slug: string, state: DotState) =>
@@ -84,20 +106,12 @@ export default function ProductsTable() {
     } finally { setBulkBusy(false); }
   };
 
-  // Category options derived from the loaded catalog (by `kind`), sorted by frequency.
-  const categoryOptions = useMemo<CategoryOption[]>(() => {
-    const counts = new Map<string, number>();
-    for (const r of rows) { if (r.kind) counts.set(r.kind, (counts.get(r.kind) || 0) + 1); }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([value, count]) => ({ value, label: value, count }));
-  }, [rows]);
+  const [catFilter, setCatFilter] = useState('');
 
   const visibleRows = useMemo(() => {
     let result = rows;
-    if (selectedCats.length > 0) {
-      const set = new Set(selectedCats);
-      result = result.filter((r) => set.has(r.kind));
+    if (catFilter) {
+      result = result.filter((r) => r.cats.some((c) => c.startsWith(`${catFilter}_`)));
     }
     for (const [slug, states] of Object.entries(dotFilters)) {
       if (states.size === 0) continue;
@@ -108,7 +122,7 @@ export default function ProductsTable() {
       });
     }
     return result;
-  }, [rows, selectedCats, dotFilters]);
+  }, [rows, catFilter, dotFilters]);
 
   // One clickable colored-dot cell per marketplace (click → dedicated CRUD route).
   const makeDotCell = useCallback((slug: string, name: string) =>
@@ -168,6 +182,7 @@ export default function ProductsTable() {
         price: p.price_gross || 0,
         qty: p.qty ?? 0,
         kind: p.kind || '',
+        cats: p.cats || [],
         statuses: {},
       }));
       setRows(baseRows);
@@ -231,12 +246,16 @@ export default function ProductsTable() {
 
   return (
     <div className="space-y-3">
-      <CategoryChips
-        options={categoryOptions}
-        selected={selectedCats}
-        onToggle={(v) => setSelectedCats((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]))}
-        onClear={() => setSelectedCats([])}
-      />
+      <select
+        className="input w-64 text-sm"
+        value={catFilter}
+        onChange={(e) => setCatFilter(e.target.value)}
+      >
+        <option value="">Wszystkie kategorie</option>
+        {CATEGORY_TREE.map((c) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
 
       {/* Dot filters */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -289,7 +308,7 @@ export default function ProductsTable() {
         <div className="text-sm text-gray-500">
           {loading
             ? `Wczytywanie… ${loaded.toLocaleString('pl')}${total ? ` / ${total.toLocaleString('pl')}` : ''}`
-            : `${visibleRows.length.toLocaleString('pl')}${selectedCats.length ? ` / ${rows.length.toLocaleString('pl')}` : ''} produktów`}
+            : `${visibleRows.length.toLocaleString('pl')}${catFilter ? ` / ${rows.length.toLocaleString('pl')}` : ''} produktów`}
         </div>
       </div>
 

@@ -39,12 +39,33 @@ export async function GET() {
       `SELECT * FROM allegro_offers WHERE status <> 'draft' ORDER BY updated_at DESC LIMIT 2000`
     );
 
+    // Pobierz realny status z marketplace_live_offers dla ofert pending/active.
+    // Klucz: ref = mirakl_shop_sku (BRW/Empik) lub allegro_offer_id (Allegro).
+    const refs = offers
+      .map((o) => o.mirakl_shop_sku || o.allegro_offer_id)
+      .filter(Boolean) as string[];
+    const liveMap = new Map<string, { active: number }>();
+    if (refs.length) {
+      const ph = refs.map(() => '?').join(',');
+      const liveRows = await query<{ ref: string; active: number }>(
+        `SELECT ref, active FROM marketplace_live_offers WHERE ref IN (${ph})`,
+        refs
+      );
+      for (const r of liveRows) liveMap.set(r.ref, { active: r.active });
+    }
+
     const rows: AddedRow[] = offers.map((o) => {
       const fd = (typeof o.form_data === 'string' ? safeParse(o.form_data) : o.form_data) as
         Record<string, unknown> | null;
       const sku = String((fd?.sku as string) || o.mirakl_shop_sku || o.typesense_id || '');
       const ean = String((fd?.ean as string) || '');
       const { name, slug } = marketName(o.marketplace, o.account_id);
+      const ref = o.mirakl_shop_sku || o.allegro_offer_id || null;
+      const live = ref ? liveMap.get(ref) : undefined;
+      // Preferuj status z marketplace_live_offers (realny) nad allegro_offers.status (może być przestarzały).
+      const status = live != null
+        ? (live.active ? 'active' : 'ended')
+        : o.status;
       return {
         id: o.id,
         market: name,
@@ -52,8 +73,8 @@ export async function GET() {
         engine: o.marketplace,
         sku,
         ean,
-        status: o.status,
-        ref: o.allegro_offer_id ?? o.mirakl_shop_sku ?? null,
+        status,
+        ref,
         error: o.error_message ?? null,
         productImportId: o.mirakl_product_import_id ?? null,
         offerImportId: o.mirakl_offer_import_id ?? null,

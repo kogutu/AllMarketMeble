@@ -22,12 +22,17 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   error: { label: 'Błąd', cls: 'bg-red-100 text-red-700' },
 };
 
+const PAGE_SIZE = 20;
+
 export default function BulkPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [publishing, setPublishing] = useState<Set<number>>(new Set());
   const [published, setPublished] = useState<Set<number>>(new Set());
   const [batchBusy, setBatchBusy] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [mpFilter, setMpFilter] = useState('');
+  const [page, setPage] = useState(1);
 
   // Publikacja szkicu wprost z panelu — trafia do właściwego endpointu wg marketplace.
   const publishItem = async (it: Item, silent = false): Promise<boolean> => {
@@ -116,14 +121,28 @@ export default function BulkPage() {
 
   const active = (counts.pending || 0) + (counts.processing || 0);
 
+  // Filtrowanie
+  const q = search.trim().toLowerCase();
+  const filtered = items.filter((it) => {
+    if (mpFilter && it.marketplace !== mpFilter) return false;
+    if (q && !it.title?.toLowerCase().includes(q) && !it.ean?.includes(q) && !it.typesense_id.includes(q)) return false;
+    return true;
+  });
+
+  // Paginacja płaska (nie po grupach, bo grupy mogą być puste po filtrze)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   // Grupowanie po nazwanej liście (batch), z zachowaniem kolejności z API (najnowsze listy u góry).
   const groups: { id: string; name: string; items: Item[] }[] = [];
   const gmap = new Map<string, number>();
-  for (const it of items) {
+  for (const it of paginated) {
     let gi = gmap.get(it.batch_id);
     if (gi === undefined) { gi = groups.length; gmap.set(it.batch_id, gi); groups.push({ id: it.batch_id, name: it.batch_name || 'Lista', items: [] }); }
     groups[gi].items.push(it);
   }
+
+  const marketplaces = Array.from(new Set(items.map((i) => i.marketplace))).sort();
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-4">
@@ -140,6 +159,26 @@ export default function BulkPage() {
           <button className="btn-secondary btn-sm" onClick={() => clear('done')}>Usuń gotowe</button>
           <button className="btn-secondary btn-sm text-red-600" onClick={() => clear('all')}>Wyczyść wszystko</button>
         </div>
+      </div>
+
+      {/* Wyszukiwarka + filtr marketplace */}
+      <div className="flex gap-2 flex-wrap">
+        <input
+          className="input flex-1 min-w-48 text-sm"
+          placeholder="Szukaj po tytule, EAN…"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+        />
+        <select className="input w-40 text-sm" value={mpFilter} onChange={(e) => { setMpFilter(e.target.value); setPage(1); }}>
+          <option value="">Wszystkie</option>
+          {marketplaces.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        {(search || mpFilter) && (
+          <button className="btn-secondary btn-sm text-xs" onClick={() => { setSearch(''); setMpFilter(''); setPage(1); }}>
+            Wyczyść
+          </button>
+        )}
+        <span className="text-xs text-gray-400 self-center">{filtered.length} pozycji</span>
       </div>
 
       {groups.length === 0 ? (
@@ -220,6 +259,17 @@ export default function BulkPage() {
           </div>
         );
       })}
+
+      {/* Paginacja */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <button className="btn-secondary btn-sm text-xs" onClick={() => setPage(1)} disabled={page === 1}>«</button>
+          <button className="btn-secondary btn-sm text-xs" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>‹</button>
+          <span className="text-sm text-gray-600">Strona {page} / {totalPages}</span>
+          <button className="btn-secondary btn-sm text-xs" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>›</button>
+          <button className="btn-secondary btn-sm text-xs" onClick={() => setPage(totalPages)} disabled={page === totalPages}>»</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -64,18 +64,19 @@ export default function DodanePage() {
     const text = live ? live.join(' · ') : data.error || '';
     const canFetch = data.engine === 'mirakl' && (data.productImportId || data.offerImportId);
     return (
-      <div className="flex items-center gap-2 h-full w-full">
+      <div className="flex items-center gap-2 h-full w-full" onClick={(e) => e.stopPropagation()}>
         <span className={clsx('text-xs truncate flex-1', text ? 'text-red-600' : 'text-gray-300')}
           title={text || 'brak'}>
-          {text || '—'}
+          {text || (canFetch ? 'kliknij Pobierz →' : '—')}
         </span>
         {canFetch && (
           <button
-            onClick={() => fetchErrors(data.id)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); fetchErrors(data.id); }}
             disabled={loadingErr[data.id]}
-            className="text-[11px] px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-100 text-gray-600 shrink-0"
+            className="text-[11px] px-2 py-0.5 rounded border border-gray-200 hover:bg-gray-100 text-gray-600 shrink-0 disabled:opacity-50"
           >
-            {loadingErr[data.id] ? '…' : 'Pobierz'}
+            {loadingErr[data.id] ? '…' : 'Pobierz błędy'}
           </button>
         )}
       </div>
@@ -104,8 +105,13 @@ export default function DodanePage() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-900">Dodane — oferty per marketplace</h1>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-lg font-semibold text-gray-900">Dodane — oferty per marketplace</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
+            <span className="text-amber-600 font-medium">Oczekuje</span> = import wysłany do BRW/Empik, czeka na przetworzenie przez marketplace (może trwać kilka minut–godzin). Kliknij „Pobierz błędy" by sprawdzić wynik importu.
+          </p>
+        </div>
         <div className="text-sm text-gray-500">{loading ? 'Wczytywanie…' : `${visibleRows.length.toLocaleString('pl')} ofert`}</div>
       </div>
 

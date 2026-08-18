@@ -127,6 +127,22 @@ export async function syncChunk(slug: string, offset: number, limit: number, run
       };
     });
     await upsert(rows, syncedAt);
+
+    // Zsynchronizuj status allegro_offers z marketplace_live_offers (pending → active/ended).
+    if (rows.length > 0) {
+      const refs = rows.map((r) => r.ref).filter(Boolean);
+      if (refs.length) {
+        const ph = refs.map(() => '?').join(',');
+        await query(
+          `UPDATE allegro_offers ao
+             JOIN marketplace_live_offers mlo ON mlo.ref = ao.mirakl_shop_sku AND mlo.marketplace = ?
+           SET ao.status = IF(mlo.active=1,'active','ended'), ao.updated_at = NOW()
+           WHERE ao.mirakl_shop_sku IN (${ph}) AND ao.status = 'pending'`,
+          [slug, ...refs]
+        ).catch(() => {/* non-fatal */});
+      }
+    }
+
     const nextOffset = offset + limit;
     result = { processed: offers.length, total, nextOffset, done: nextOffset >= total };
   } else {

@@ -280,6 +280,18 @@ async function processMirakl(item: BulkItem, operator: 'empik' | 'brw'): Promise
         const guess = /drewn|dąb|sosn|orzech/i.test(n) ? 'drewno' : /metal|stal|chrom/i.test(n) ? 'metal' : str('mat_ramy');
         const v = bestMatch(vals, guess); if (v) deterministic[c] = v;
       }
+      else if (/key-mozliwosc_rozkladania/.test(c)) {
+        const v = vals.find((x) => x.code === 'nie')?.code ?? (vals[0]?.code || '');
+        if (v) deterministic[c] = v;
+      }
+      else if (/key-mozliwosc_sztaplowania/.test(c)) {
+        const v = vals.find((x) => x.code === 'nie')?.code ?? (vals[0]?.code || '');
+        if (v) deterministic[c] = v;
+      }
+      else if (/classificationstore-key-marka$/.test(c)) {
+        const v = vals.find((x) => /mebelpartner/i.test(x.code) || /mebel.?partner/i.test(x.code))?.code;
+        if (v) deterministic[c] = v;
+      }
       else if (/key-liczba_sztuk_w_komplecie/.test(c)) {
         const qty = str('liczba_sztuk_w_komplecie') || '1';
         deterministic[c] = vals.find((x) => x.code === qty)?.code ?? '1';

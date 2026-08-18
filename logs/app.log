@@ -99,3 +99,7 @@
 {"timestamp":"2026-07-13T10:13:00.584Z","level":"info","message":"mirakl importProducts","data":{"operator":"brw","importId":"233476"}}
 {"timestamp":"2026-07-13T10:13:00.761Z","level":"info","message":"mirakl importOffers","data":{"operator":"brw","importId":"4624199"}}
 {"timestamp":"2026-07-13T10:13:00.761Z","level":"debug","message":"marketplace publish outcome","data":{"accountId":"brw","kind":"mirakl","outcome":{"ref":"fotel_isla_beżowy_welur,_podstawa_złoty","productImportId":"233476","offerImportId":"4624199","status":"pending"}}}
+{"timestamp":"2026-08-18T06:48:40.461Z","level":"info","message":"cron sync-all: allegro done","data":{"total":4136}}
+{"timestamp":"2026-08-18T06:48:41.461Z","level":"info","message":"cron sync-all: kaufland done","data":{"total":3119}}
+{"timestamp":"2026-08-18T06:49:35.522Z","level":"info","message":"cron sync-all: brw done","data":{"total":2574}}
+{"timestamp":"2026-08-18T06:50:15.597Z","level":"info","message":"cron sync-all: empik done","data":{"total":3279}}

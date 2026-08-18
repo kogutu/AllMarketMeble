@@ -124,9 +124,10 @@ export class MiraklAdapter implements MarketplaceAdapter, LiveOffersAdapter {
     const tpl = operatorTemplate(this.operator);
     const useLabel = tpl?.valueFormat === 'label';   // BRW oczekuje etykiet, Empik kodów
     const sep = tpl?.multiSep ?? ',';
-    // BRW nie akceptuje wielokrotnych wartości (np. "beżowy|złoty") w żadnym atrybucie LIST —
-    // zawsze bierzemy tylko pierwszą dopasowaną wartość.
-    const forceFirstOnly = this.operator === 'brw';
+    // BRW_FORCE_SINGLE=1 → stare zachowanie: zawsze pierwsza wartość (bezpieczny rollback).
+    // Domyślnie: respektujemy a.multiple z Mirakl API — pola wielokrotne (np. Materiał 621)
+    // mogą przyjąć wiele wartości rozdzielonych separatorem operatora.
+    const forceFirstOnly = this.operator === 'brw' && process.env.BRW_FORCE_SINGLE === '1';
     // Pola szablonu (sku/tytuł/opis/ean/producer) są ustawiane deterministycznie w buildProductRecord —
     // nie przetwarzaj ich przez sanitizeValueLists (ich wartości nie podlegają walidacji listy).
     const templateFieldCodes = new Set(tpl ? Object.values(tpl.fields).filter(Boolean) : []);

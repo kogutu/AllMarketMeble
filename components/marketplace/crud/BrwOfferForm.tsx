@@ -271,12 +271,20 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
         const v = a.values?.find((x) => String(x.code) === qty || String(x.label) === qty)?.code ?? '1';
         out[c] = v;
       } else if (/key-mozliwosc_rozkladania/.test(c)) {
-        // Domyślnie "nie" — produkty są nierozkładane o ile nie ma innej informacji
-        const fromAttrs = str('mozliwosc_rozkladania') || str('rozkkladana');
+        const fromAttrs = str('mozliwosc_rozkladania') || str('rozkladana');
         const v = bestMatch(a, fromAttrs || 'nie');
         if (v) out[c] = v;
       } else if (/key-mozliwosc_sztaplowania/.test(c)) {
         const v = bestMatch(a, str('mozliwosc_sztaplowania') || 'nie');
+        if (v) out[c] = v;
+      } else if (/classificationstore-key-marka$/.test(c)) {
+        const v = bestMatch(a, 'MebelPartner') ?? bestMatch(a, 'Mebel Partner');
+        if (v) out[c] = v;
+      } else if (/classificationstore-key-kraj_pochodzenia/.test(c)) {
+        const v = bestMatch(a, 'Polska');
+        if (v) out[c] = v;
+      } else if (/model-attribute-producer/.test(c)) {
+        const v = bestMatch(a, 'MEBEL-PARTNER TRADING') ?? bestMatch(a, 'MebelPartner');
         if (v) out[c] = v;
       } else if (/key-glebokosc_siedziska/.test(c)) {
         const v = str('glebokosc_siedziska') || str('glebokosc_siedziska_cm');

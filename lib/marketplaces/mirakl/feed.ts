@@ -91,14 +91,12 @@ export async function buildProductRecord(
     if (!record[f.title]) record[f.title] = form.title || '';
     if (!record[f.description]) record[f.description] = form.description || '';
     if (!record[f.ean] && form.ean) record[f.ean] = form.ean;
-    const brandName = process.env.DEFAULT_PRODUCENT_MARKA
-      || process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA
-      || 'Mebel-Partner';
-    if (f.producer && !record[f.producer]) record[f.producer] = brandName;
-    // BRW marka: użyj wartości z listy BRW (MebelPartner) zamiast "Mebel-Partner"
-    if (f.marka && !record[f.marka]) {
+    if (f.producer && !record[f.producer])
+      record[f.producer] = process.env.BRW_PRODUCER || 'MEBEL-PARTNER TRADING ARTUR KRUPIŃSKI';
+    if (f.marka && !record[f.marka])
       record[f.marka] = process.env.BRW_MARKA || 'MebelPartner';
-    }
+    if (f.kraj && !record[f.kraj])
+      record[f.kraj] = process.env.BRW_KRAJ || 'Polska';
     return record;
   }
 
