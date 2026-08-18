@@ -281,7 +281,7 @@ export default function BrwOfferForm({ product }: { product: MebleProduct }) {
         const v = bestMatch(a, 'MebelPartner') ?? bestMatch(a, 'Mebel Partner');
         if (v) out[c] = v;
       } else if (/classificationstore-key-kraj_pochodzenia/.test(c)) {
-        const v = bestMatch(a, 'Polska');
+        const v = bestMatch(a, 'Chiny');
         if (v) out[c] = v;
       } else if (/model-attribute-producer/.test(c)) {
         const v = bestMatch(a, 'MEBEL-PARTNER TRADING') ?? bestMatch(a, 'MebelPartner');
