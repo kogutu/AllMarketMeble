@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
@@ -146,6 +146,48 @@ function AccountPopover({ account, color }: { account: Account; color: string })
   );
 }
 
+function SyncResetButton() {
+  const [running, setRunning] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const poll = async () => {
+      const d = await fetch('/api/marketplace/sync-status?slug=all').then((r) => r.json()).catch(() => null);
+      if (alive) setRunning((d?.jobs ?? []).some((j: { status: string }) => j.status === 'running'));
+    };
+    poll();
+    const t = setInterval(poll, 5000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  const reset = useCallback(async () => {
+    if (!confirm('Zresetować wszystkie synchronizacje?')) return;
+    setResetting(true);
+    await fetch('/api/marketplace/sync-status?slug=all', { method: 'DELETE' }).catch(() => {});
+    setRunning(false);
+    setResetting(false);
+  }, []);
+
+  return (
+    <button
+      onClick={reset}
+      disabled={resetting}
+      title={running ? 'Synchronizacja w toku — kliknij aby zresetować' : 'Resetuj synchronizację'}
+      className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-colors disabled:opacity-50 ${
+        running
+          ? 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+          : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+      }`}
+    >
+      <svg className={`w-3.5 h-3.5 ${running && !resetting ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      {running ? 'Sync…' : 'Sync'}
+    </button>
+  );
+}
+
 export default function TopBar() {
   const pathname = usePathname();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -178,6 +220,7 @@ export default function TopBar() {
       <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
 
       <div className="flex items-center gap-2">
+        <SyncResetButton />
         {accounts.length === 0 && !verifying && (
           <Link href="/accounts" className="btn-primary btn text-xs px-3 py-1.5">
             Połącz konto Allegro
