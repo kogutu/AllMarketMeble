@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 /** GET /api/diag — sprawdza połączenie z zewnętrznymi API */
 export async function GET() {
   const checks = [

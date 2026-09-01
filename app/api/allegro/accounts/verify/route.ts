@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { listAccounts, verifyToken } from '@/lib/allegro';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const accounts = await listAccounts();

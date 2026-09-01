@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 import { listOperators } from '@/lib/marketplaces/mirakl/operators';
 
 interface MiraklAccountRow {

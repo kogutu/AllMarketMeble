@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 import type { AllegroOffer } from '@/types';
 import { getMarketplace } from '@/lib/marketplaces/catalog';
 

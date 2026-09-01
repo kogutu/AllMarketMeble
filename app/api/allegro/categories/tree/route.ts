@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getFurnitureLeaves } from '@/lib/allegroCategoryTree';
 
+export const dynamic = 'force-dynamic';
+
 /** Pełne (cache'owane raz dziennie) drzewo kategorii Meble jako płaska lista liści ze ścieżką. */
 export async function GET() {
   try {
