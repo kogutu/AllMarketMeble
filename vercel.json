@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "app/api/marketplace/**": { "maxDuration": 300 },
+    "app/api/cron/**":        { "maxDuration": 300 },
+    "app/api/allegro/**":     { "maxDuration": 60 },
+    "app/api/mirakl/**":      { "maxDuration": 60 }
+  },
+  "regions": ["fra1"]
+}
