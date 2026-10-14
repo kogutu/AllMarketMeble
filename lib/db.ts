@@ -27,8 +27,11 @@ export async function query<T = unknown>(
   params?: (string | number | boolean | null | object)[]
 ): Promise<T[]> {
   const pool = getPool();
+  // mysql2 `execute` rzuca na `undefined` w parametrach ("Bind parameters must not contain
+  // undefined"). Zamieniamy `undefined` → `null`, żeby brak pola nie wywracał całego zapytania.
+  const safe = params?.map((p) => (p === undefined ? null : p));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [rows] = await pool.execute(sql, params as any);
+  const [rows] = await pool.execute(sql, safe as any);
   return rows as T[];
 }
 

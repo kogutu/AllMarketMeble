@@ -75,7 +75,10 @@ async function api<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text();
   let data: unknown = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
-  if (!res.ok) throw new Error((data as { error?: string })?.error || `HTTP ${res.status} ${path}`);
+  if (!res.ok) {
+    const d = data as { error?: string; details?: string };
+    throw new Error([d?.error, d?.details].filter(Boolean).join(' — ') || `HTTP ${res.status} ${path}`);
+  }
   return data as T;
 }
 

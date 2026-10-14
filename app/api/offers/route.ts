@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       title,
       description,
       price,
-      quantity,
+      quantity = 1,
       category_id,
     } = body;
 
