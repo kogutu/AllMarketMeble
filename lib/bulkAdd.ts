@@ -75,10 +75,7 @@ async function api<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text();
   let data: unknown = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
-  if (!res.ok) {
-    const d = data as { error?: string; details?: string };
-    throw new Error([d?.error, d?.details].filter(Boolean).join(' — ') || `HTTP ${res.status} ${path}`);
-  }
+  if (!res.ok) throw new Error((data as { error?: string })?.error || `HTTP ${res.status} ${path}`);
   return data as T;
 }
 
@@ -268,7 +265,10 @@ async function processMirakl(item: BulkItem, operator: 'empik' | 'brw'): Promise
       deterministic[`pimcore-model-attribute-photos_${i + 1}`] = gallery[i];
     }
 
-    deterministic['pimcore-model-attribute-producer'] = brand;
+    // Producent = pełna, legalna nazwa z listy dozwolonych wartości BRW (NIE skrót marki).
+    // To pole szablonu, więc sanitizeValueLists go nie normalizuje — musi tu być dokładna etykieta.
+    // Spójne z domyślną wartością w feed.ts (BRW_PRODUCER).
+    deterministic['pimcore-model-attribute-producer'] = process.env.BRW_PRODUCER || 'MEBEL-PARTNER TRADING ARTUR KRUPIŃSKI';
     deterministic['pimcore-classificationstore-key-marka'] = brand;
 
     for (const a of reqAttrs) {
