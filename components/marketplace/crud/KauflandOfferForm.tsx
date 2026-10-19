@@ -32,6 +32,9 @@ interface KForm {
   categoryCode: string;
   categoryLabel: string;
   attributes: Record<string, string>;
+  description: string;
+  short_description: string;
+  images: string[];
 }
 
 function Skel({ h = 'h-9' }: { h?: string }) {
@@ -53,6 +56,9 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
     categoryCode: '',
     categoryLabel: '',
     attributes: {},
+    description: (product.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+    short_description: '',
+    images: product.gallery_images?.length ? product.gallery_images : (product.img ? [product.img] : []),
   }));
   const [kAttributes, setKAttributes] = useState<KAttr[]>([]);
 
@@ -176,7 +182,13 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
       });
       const d = await res.json();
       if (d.error) { toast.error('Błąd AI: ' + (d.details || d.error)); return; }
-      setForm((f) => ({ ...f, title: d.title || f.title, handling_time: d.handling_time || f.handling_time }));
+      setForm((f) => ({
+        ...f,
+        title: d.title || f.title,
+        handling_time: d.handling_time || f.handling_time,
+        ...(d.description       ? { description: d.description }             : {}),
+        ...(d.short_description ? { short_description: d.short_description } : {}),
+      }));
       toast.success('AI wypełniło formularz');
     } catch {
       toast.error('Błąd wypełniania AI');
@@ -367,6 +379,40 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
               <option value="">—</option>
               {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}{w.isDefault ? ' (domyślny)' : ''}</option>)}
             </select>
+          )}
+        </div>
+      </div>
+
+      {/* Description + Images — sent to Kaufland Product data catalog */}
+      <div className="space-y-3">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase">Opis i zdjęcia (Product data)</h4>
+        <div>
+          <label className="label">Opis <span className="text-gray-400 font-normal">(HTML, do 65 000 znaków)</span></label>
+          <textarea className={`input min-h-[90px]${form.description ? ' is-filled' : ''}`}
+            value={form.description}
+            onChange={(e) => set({ description: e.target.value })}
+            placeholder="Opis produktu widoczny na Kaufland.pl…" />
+        </div>
+        <div>
+          <label className="label">Krótki opis <span className="text-gray-400 font-normal">(bez HTML, do 1 024 znaków)</span></label>
+          <textarea className={`input min-h-[60px]${form.short_description ? ' is-filled' : ''}`}
+            value={form.short_description}
+            onChange={(e) => set({ short_description: e.target.value })}
+            placeholder="Krótkie podsumowanie najważniejszych cech produktu…" />
+        </div>
+        <div>
+          <label className="label">Zdjęcia <span className="text-gray-400 font-normal">(URL każdego w osobnej linii)</span></label>
+          <textarea className={`input min-h-[80px] font-mono text-xs${form.images.length ? ' is-filled' : ''}`}
+            value={form.images.join('\n')}
+            onChange={(e) => set({ images: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+            placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg" />
+          {form.images.length > 0 && (
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {form.images.slice(0, 8).map((url, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={url} alt="" className="w-14 h-14 object-contain rounded border border-gray-200 bg-gray-50" />
+              ))}
+            </div>
           )}
         </div>
       </div>

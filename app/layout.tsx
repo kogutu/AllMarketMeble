@@ -11,6 +11,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Meble → Allegro / Empik Panel',
   description: 'Zarządzaj meblami i wystawiaj oferty na Allegro i Empik',
+  icons: { icon: '/znaczek.webp', shortcut: '/znaczek.webp', apple: '/znaczek.webp' },
 };
 
 export default function RootLayout({

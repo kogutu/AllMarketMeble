@@ -23,7 +23,7 @@ function sign(method: string, url: string, body: string, ts: number): string {
 }
 
 async function request<T = unknown>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT',
   path: string,
   params?: Record<string, string | number>,
   data?: unknown
@@ -196,6 +196,54 @@ export const KauflandClient = {
     return data.data ?? [];
   },
 
+  /**
+   * Wyślij dane produktu do katalogu Kaufland (tytuł, opis, zdjęcia, producent).
+   * WYMAGA locale=de-DE — Kaufland traktuje wersję de-DE jako bazową; bez niej status
+   * "missing: Hersteller/Titel/Beschreibung/Bild" i produkt nie wychodzi live.
+   * Wysyłamy dwa razy: de-DE (wymagane) + pl-PL (dla polskiego storefront).
+   */
+  async submitProductData(input: KauflandProductData): Promise<void> {
+    const a: Record<string, unknown> = {
+      title: [input.title],
+      manufacturer: [input.manufacturer],
+    };
+    if (input.mpn)               a.mpn = [input.mpn];
+    if (input.description)       a.description = [input.description];
+    if (input.short_description) a.short_description = [input.short_description];
+    if (input.images?.length)    a.picture = input.images;
+    if (input.category)          a.category = [input.category];
+    if (input.colour)            a.colour = [input.colour];
+    if (input.material)          a.material = [input.material];
+    if (input.wood_type)         a.wood_type = [input.wood_type];
+    if (input.width)             a.width = [input.width];
+    if (input.height)            a.height = [input.height];
+    if (input.depth)             a.depth = [input.depth];
+    if (input.length)            a.length = [input.length];
+    if (input.weight)            a.weight = [input.weight];
+    if (input.form)              a.form = [input.form];
+    if (input.surface_style)     a.surface_style = [input.surface_style];
+    if (input.suitable_for_location) a.suitable_for_location = [input.suitable_for_location];
+    if (input.extendable != null) a.extendable = [String(input.extendable)];
+    if (input.foldable != null)   a.foldable = [String(input.foldable)];
+    if (input.model)             a.model = [input.model];
+    if (input.product_dimensions) a.product_dimensions = [input.product_dimensions];
+    if (input.package_included)  a.package_included = [input.package_included];
+    const body = { ean: [input.ean], attributes: a };
+    // de-DE wymagane przez Kaufland jako baza katalogu
+    await request('PUT', '/product-data/', { locale: 'de-DE' }, body);
+    // pl-PL dla polskiego storefront (opis w języku klienta)
+    await request('PUT', '/product-data/', { locale: 'pl-PL' }, body).catch(() => {/* non-fatal */});
+  },
+
+  /** Sprawdź status przetwarzania product data dla EAN. */
+  async getProductDataStatus(ean: string): Promise<{ status: string; missing: string[] } | null> {
+    try {
+      const data = await request<{ data?: { update_status?: string; missing_attributes?: string[] } }>(
+        'GET', `/product-data/status/${encodeURIComponent(ean)}`, { locale: 'de-DE' });
+      return { status: data.data?.update_status ?? 'UNKNOWN', missing: data.data?.missing_attributes ?? [] };
+    } catch { return null; }
+  },
+
   async getShippingGroups(): Promise<KauflandShippingGroup[]> {
     const data = await request<{ data?: KauflandShippingGroup[] }>('GET', '/shipping-groups', { storefront: STOREFRONT });
     return data.data ?? [];
@@ -242,6 +290,34 @@ export interface KauflandAttribute {
 }
 export interface KauflandShippingGroup { id_shipping_group: number; name: string; is_default?: boolean; }
 export interface KauflandWarehouse { id_warehouse: number; name: string; is_default?: boolean; }
+export interface KauflandProductData {
+  ean: string;
+  title: string;
+  manufacturer: string;
+  mpn?: string;
+  description?: string;
+  short_description?: string;
+  images?: string[];
+  category?: string;
+  // Category-specific (furniture)
+  colour?: string;
+  material?: string;
+  wood_type?: string;
+  width?: string;
+  height?: string;
+  depth?: string;
+  length?: string;
+  weight?: string;
+  form?: string;
+  surface_style?: string;
+  suitable_for_location?: string;
+  extendable?: boolean;
+  foldable?: boolean;
+  model?: string;
+  product_dimensions?: string;
+  package_included?: string;
+}
+
 export interface KauflandCreateUnit {
   id_offer: string; ean: string; price: number; amount: number;
   condition?: string; minimum_price?: number; handling_time?: number; note?: string;

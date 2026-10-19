@@ -1,4 +1,4 @@
-import { KauflandClient, type KauflandUnit, type KauflandCategory } from './client';
+import { KauflandClient, type KauflandUnit, type KauflandCategory, type KauflandProductData } from './client';
 import type {
   MarketplaceAdapter, MarketplaceCategory, MarketplaceAttribute,
   OfferDraft, PublishOutcome, LiveStatus, LiveOfferRow, LiveOffersAdapter,
@@ -164,11 +164,44 @@ export class KauflandAdapter implements MarketplaceAdapter, LiveOffersAdapter {
         if (!existing?.id_unit) throw err;
         const idUnit = String(existing.id_unit);
         await KauflandClient.updateUnit(idUnit, price, amount);
-        return { ref: idUnit, status: 'active', raw: existing as Record<string, unknown> };
+        // submitProductData uruchamiamy poniżej — po wyjściu z bloku catch
+        unit = existing;
+      } else {
+        throw err;
       }
       throw err;
     }
-    const ref = String(unit.id_unit ?? idOffer);
+    const ref = String((unit as KauflandUnit).id_unit ?? idOffer);
+
+    // Wyślij product data do katalogu Kaufland (tytuł, opis, zdjęcia, producent).
+    // Non-fatal: jeśli się nie uda, unit już istnieje — product data można uzupełnić ręcznie.
+    const images: string[] = Array.isArray(f.images) ? (f.images as string[]).filter(Boolean) :
+      (draft.product?.gallery_images ?? (draft.product?.img ? [draft.product.img as string] : []));
+    const description = String(f.description ?? draft.product?.description ?? '')
+      .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 65000);
+    const attrs = (f.attributes as Record<string, string> | undefined) ?? {};
+    const productData: KauflandProductData = {
+      ean,
+      title:         String(f.title ?? draft.product?.name ?? idOffer).slice(0, 512),
+      manufacturer:  attrs.manufacturer || 'Mebel Partner',
+      mpn:           attrs.mpn || idOffer,
+      category:      String(f.categoryLabel ?? ''),
+      ...(description              ? { description }                                           : {}),
+      ...(f.short_description      ? { short_description: String(f.short_description).slice(0, 1024) } : {}),
+      ...(images.length            ? { images: images.slice(0, 10) }                           : {}),
+      ...(attrs.colour             ? { colour: attrs.colour }                                  : {}),
+      ...(attrs.material           ? { material: attrs.material }                              : {}),
+      ...(attrs.wood_type          ? { wood_type: attrs.wood_type }                            : {}),
+      ...(attrs.width              ? { width: attrs.width }                                    : {}),
+      ...(attrs.height             ? { height: attrs.height }                                  : {}),
+      ...(attrs.depth              ? { depth: attrs.depth }                                    : {}),
+      ...(attrs.length             ? { length: attrs.length }                                  : {}),
+      ...(attrs.weight             ? { weight: attrs.weight }                                  : {}),
+    };
+    await KauflandClient.submitProductData(productData).catch((e) =>
+      console.warn('[kaufland] submitProductData failed (non-fatal):', String(e).slice(0, 200))
+    );
+
     return { ref, status: 'active', raw: unit as Record<string, unknown> };
   }
 
