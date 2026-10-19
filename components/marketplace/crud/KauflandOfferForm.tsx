@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Kaufland — samodzielny formularz CRUD oferty (storefront PL).
@@ -6,29 +6,43 @@
  * Pełna, niezależna logika — edycja tego pliku nie wpływa na Empik/BRW/Allegro.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import toast from 'react-hot-toast';
-import type { MebleProduct } from '@/types';
-import CrudOverlay from './CrudOverlay';
+import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
+import type { MebleProduct } from "@/types";
+import CrudOverlay from "./CrudOverlay";
 
-const SLUG = 'kaufland';
-const MP_NAME = 'Kaufland';
+const SLUG = "kaufland";
+const MP_NAME = "Kaufland";
 
-interface Category { code: string; label: string; leaf: boolean; }
-interface Option { id: number; name: string; isDefault: boolean; }
-interface KAttr { code: string; label: string; type: string; required: boolean; multiple?: boolean; }
+interface Category {
+  code: string;
+  label: string;
+  leaf: boolean;
+}
+interface Option {
+  id: number;
+  name: string;
+  isDefault: boolean;
+}
+interface KAttr {
+  code: string;
+  label: string;
+  type: string;
+  required: boolean;
+  multiple?: boolean;
+}
 
 interface KForm {
   title: string;
   sku: string;
   ean: string;
   price: number;
-  minimum_price: number | '';
+  minimum_price: number | "";
   quantity: number;
   condition: string;
   handling_time: number;
-  id_shipping_group: number | '';
-  id_warehouse: number | '';
+  id_shipping_group: number | "";
+  id_warehouse: number | "";
   categoryCode: string;
   categoryLabel: string;
   attributes: Record<string, string>;
@@ -37,32 +51,47 @@ interface KForm {
   images: string[];
 }
 
-function Skel({ h = 'h-9' }: { h?: string }) {
-  return <div className={`w-full ${h} rounded-md bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-pulse`} />;
+function Skel({ h = "h-9" }: { h?: string }) {
+  return (
+    <div
+      className={`w-full ${h} rounded-md bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] animate-pulse`}
+    />
+  );
 }
 
-export default function KauflandOfferForm({ product }: { product: MebleProduct }) {
+export default function KauflandOfferForm({
+  product,
+}: {
+  product: MebleProduct;
+}) {
   const [form, setForm] = useState<KForm>(() => ({
     title: product.name,
     sku: product.sku || String(product.id),
-    ean: product.ean || '',
+    ean: product.ean || "",
     price: product.price_gross || 0,
-    minimum_price: '',
+    minimum_price: "",
     quantity: product.qty || 1,
-    condition: 'NEW',
+    condition: "NEW",
     handling_time: 1,
-    id_shipping_group: '',
-    id_warehouse: '',
-    categoryCode: '',
-    categoryLabel: '',
+    id_shipping_group: "",
+    id_warehouse: "",
+    categoryCode: "",
+    categoryLabel: "",
     attributes: {},
-    description: (product.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-    short_description: '',
-    images: product.gallery_images?.length ? product.gallery_images : (product.img ? [product.img] : []),
+    description: (product.description || "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+    short_description: "",
+    images: product.gallery_images?.length
+      ? product.gallery_images
+      : product.img
+        ? [product.img]
+        : [],
   }));
   const [kAttributes, setKAttributes] = useState<KAttr[]>([]);
 
-  const [phrase, setPhrase] = useState('');
+  const [phrase, setPhrase] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [shippingGroups, setShippingGroups] = useState<Option[]>([]);
   const [warehouses, setWarehouses] = useState<Option[]>([]);
@@ -70,38 +99,89 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
   const [draftId, setDraftId] = useState<number | null>(null);
   const [unitId, setUnitId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [aiBusy, setAiBusy] = useState<null | 'category' | 'fill'>(null);
+  const [aiBusy, setAiBusy] = useState<null | "category" | "fill">(null);
   const [status, setStatus] = useState<string | null>(null);
   const autoSuggestedRef = useRef(false);
-  const autoFillForRef = useRef('');
+  const autoFillForRef = useRef("");
 
   const set = (patch: Partial<KForm>) => setForm((f) => ({ ...f, ...patch }));
   // Klasa podświetlenia pola z wprowadzoną wartością.
-  const fc = (v: unknown) => (Array.isArray(v) ? v.length > 0 : v !== '' && v != null && v !== 0) ? ' is-filled' : '';
+  const fc = (v: unknown) =>
+    (Array.isArray(v) ? v.length > 0 : v !== "" && v != null && v !== 0)
+      ? " is-filled"
+      : "";
 
   // Pre-fill product attributes from Typesense product data.
   const prefillAttrs = (attrs: KAttr[]): Record<string, string> => {
     const pAttrs = (product.attrs || {}) as Record<string, unknown>;
-    const dims = (product as unknown as Record<string, unknown>);
-    const dimItems = (dims.dimensions as { items?: { s?: string; w?: string; d?: string }[] } | undefined)?.items?.[0];
-    const str = (k: string) => String(pAttrs[k] ?? '');
+    const dims = product as unknown as Record<string, unknown>;
+    const dimItems = (
+      dims.dimensions as
+        | { items?: { s?: string; w?: string; d?: string }[] }
+        | undefined
+    )?.items?.[0];
+    const str = (k: string) => String(pAttrs[k] ?? "");
     const dim = (keys: string[]): string => {
-      for (const k of keys) { const v = str(k); if (v && v !== '0') return `${v} cm`; }
-      return '';
+      for (const k of keys) {
+        const v = str(k);
+        if (v && v !== "0") return `${v} cm`;
+      }
+      return "";
     };
     const out: Record<string, string> = {};
     for (const a of attrs) {
       switch (a.code) {
-        case 'manufacturer': out[a.code] = process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || 'Mebel Partner'; break;
-        case 'mpn':          out[a.code] = product.sku || String(product.id); break;
-        case 'colour':       out[a.code] = str('kolor_blatu') || str('kolor') || (product.color?.name || ''); break;
-        case 'material':     out[a.code] = str('materiał_blatu') || str('material_blatu') || str('tkanina') || str('materiał') || ''; break;
-        case 'wood_type':    out[a.code] = str('materiał_podstawy') || str('material_podstawy') || ''; break;
-        case 'width':        out[a.code] = dim(['szerokość','szerokosc']) || (dimItems?.s ? `${dimItems.s} cm` : ''); break;
-        case 'height':       out[a.code] = dim(['wysokość','wysokosc']); break;
-        case 'depth':        out[a.code] = dim(['długość_siedziska','glebokosc']) || (dimItems?.d ? `${dimItems.d} cm` : ''); break;
-        case 'length':       out[a.code] = dim(['długość','dlugosc']) || (dimItems?.s ? `${dimItems.s} cm` : ''); break;
-        case 'weight':       { const w = str('waga_produktu_kg') || String((dims.dimensions as { weight?: string } | undefined)?.weight ?? ''); out[a.code] = w ? `${w} kg` : ''; break; }
+        case "manufacturer":
+          out[a.code] =
+            process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || "Mebel Partner";
+          break;
+        case "mpn":
+          out[a.code] = product.sku || String(product.id);
+          break;
+        case "colour":
+          out[a.code] =
+            str("kolor_blatu") || str("kolor") || product.color?.name || "";
+          break;
+        case "material":
+          out[a.code] =
+            str("materiał_blatu") ||
+            str("material_blatu") ||
+            str("tkanina") ||
+            str("materiał") ||
+            "";
+          break;
+        case "wood_type":
+          out[a.code] =
+            str("materiał_podstawy") || str("material_podstawy") || "";
+          break;
+        case "width":
+          out[a.code] =
+            dim(["szerokość", "szerokosc"]) ||
+            (dimItems?.s ? `${dimItems.s} cm` : "");
+          break;
+        case "height":
+          out[a.code] = dim(["wysokość", "wysokosc"]);
+          break;
+        case "depth":
+          out[a.code] =
+            dim(["długość_siedziska", "glebokosc"]) ||
+            (dimItems?.d ? `${dimItems.d} cm` : "");
+          break;
+        case "length":
+          out[a.code] =
+            dim(["długość", "dlugosc"]) ||
+            (dimItems?.s ? `${dimItems.s} cm` : "");
+          break;
+        case "weight": {
+          const w =
+            str("waga_produktu_kg") ||
+            String(
+              (dims.dimensions as { weight?: string } | undefined)?.weight ??
+                "",
+            );
+          out[a.code] = w ? `${w} kg` : "";
+          break;
+        }
       }
       if (!out[a.code]) delete out[a.code];
     }
@@ -112,7 +192,9 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
   const loadOptions = async (categoryCode: string) => {
     setLoadingOpts(true);
     try {
-      const res = await fetch(`/api/kaufland/categories/${encodeURIComponent(categoryCode || '1')}/attributes`);
+      const res = await fetch(
+        `/api/kaufland/categories/${encodeURIComponent(categoryCode || "1")}/attributes`,
+      );
       const d = await res.json();
       const sg: Option[] = d.shippingGroups || [];
       const wh: Option[] = d.warehouses || [];
@@ -123,8 +205,12 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
       const prefilled = prefillAttrs(attrs);
       setForm((f) => ({
         ...f,
-        id_shipping_group: f.id_shipping_group || (sg.find((g) => g.isDefault) ?? sg[0])?.id || '',
-        id_warehouse: f.id_warehouse || (wh.find((w) => w.isDefault) ?? wh[0])?.id || '',
+        id_shipping_group:
+          f.id_shipping_group ||
+          (sg.find((g) => g.isDefault) ?? sg[0])?.id ||
+          "",
+        id_warehouse:
+          f.id_warehouse || (wh.find((w) => w.isDefault) ?? wh[0])?.id || "",
         attributes: { ...prefilled, ...f.attributes },
       }));
     } finally {
@@ -132,12 +218,15 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
     }
   };
 
-  useEffect(() => { loadOptions(''); /* load defaults early */ // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadOptions(""); /* load defaults early */ // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const searchCategories = async () => {
     if (!phrase.trim()) return;
-    const res = await fetch(`/api/kaufland/categories?phrase=${encodeURIComponent(phrase)}`);
+    const res = await fetch(
+      `/api/kaufland/categories?phrase=${encodeURIComponent(phrase)}`,
+    );
     const d = await res.json();
     setCategories(d.categories || []);
   };
@@ -149,49 +238,62 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
   };
 
   const runSuggestCategory = async () => {
-    setAiBusy('category');
+    setAiBusy("category");
     try {
-      const res = await fetch('/api/kaufland/suggest-category', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/kaufland/suggest-category", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId: String(product.id) }),
       });
       const d = await res.json();
       if (d.categoryCode) {
-        set({ categoryCode: d.categoryCode, categoryLabel: d.categoryLabel || d.categoryCode });
+        set({
+          categoryCode: d.categoryCode,
+          categoryLabel: d.categoryLabel || d.categoryCode,
+        });
         setPhrase(d.categoryLabel || d.categoryCode);
         setCategories([]);
-        toast.success(`AI dopasowało kategorię: ${d.categoryLabel || d.categoryCode}`);
+        toast.success(
+          `AI dopasowało kategorię: ${d.categoryLabel || d.categoryCode}`,
+        );
       } else {
-        toast('AI nie znalazło kategorii — wyszukaj ręcznie', { icon: 'ℹ️' });
+        toast("AI nie znalazło kategorii — wyszukaj ręcznie", { icon: "ℹ️" });
       }
     } catch {
-      toast.error('Błąd dopasowania kategorii');
+      toast.error("Błąd dopasowania kategorii");
     } finally {
       setAiBusy(null);
     }
   };
 
   const runAiFill = async () => {
-    setAiBusy('fill');
+    setAiBusy("fill");
     try {
-      const res = await fetch('/api/kaufland/fill', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: String(product.id), categoryLabel: form.categoryLabel }),
+      const res = await fetch("/api/kaufland/fill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: String(product.id),
+          categoryLabel: form.categoryLabel,
+        }),
       });
       const d = await res.json();
-      if (d.error) { toast.error('Błąd AI: ' + (d.details || d.error)); return; }
+      if (d.error) {
+        toast.error("Błąd AI: " + (d.details || d.error));
+        return;
+      }
       setForm((f) => ({
         ...f,
         title: d.title || f.title,
         handling_time: d.handling_time || f.handling_time,
-        ...(d.description       ? { description: d.description }             : {}),
-        ...(d.short_description ? { short_description: d.short_description } : {}),
+        ...(d.description ? { description: d.description } : {}),
+        ...(d.short_description
+          ? { short_description: d.short_description }
+          : {}),
       }));
-      toast.success('AI wypełniło formularz');
+      toast.success("AI wypełniło formularz");
     } catch {
-      toast.error('Błąd wypełniania AI');
+      toast.error("Błąd wypełniania AI");
     } finally {
       setAiBusy(null);
     }
@@ -207,7 +309,11 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
 
   // Po dopasowaniu/wyborze kategorii → automatycznie uruchom AI „Wypełnij”.
   useEffect(() => {
-    if (form.categoryCode && autoFillForRef.current !== form.categoryCode && aiBusy === null) {
+    if (
+      form.categoryCode &&
+      autoFillForRef.current !== form.categoryCode &&
+      aiBusy === null
+    ) {
       autoFillForRef.current = form.categoryCode;
       runAiFill();
     }
@@ -215,23 +321,27 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
   }, [form.categoryCode]);
 
   const saveDraft = async (): Promise<number | null> => {
-    const res = await fetch('/api/offers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/offers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         typesense_id: String(product.id),
-        typesense_collection: process.env.NEXT_PUBLIC_TYPESENSE_COLLECTION || 'meble',
+        typesense_collection:
+          process.env.NEXT_PUBLIC_TYPESENSE_COLLECTION || "meble",
         marketplace: SLUG,
         form_data: form,
         title: form.title,
-        description: '',
+        description: "",
         price: form.price,
         quantity: form.quantity,
         category_id: form.categoryCode,
       }),
     });
     const d = await res.json();
-    if (d?.id) { setDraftId(d.id); return d.id; }
+    if (d?.id) {
+      setDraftId(d.id);
+      return d.id;
+    }
     return null;
   };
 
@@ -239,22 +349,38 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
     setBusy(true);
     try {
       const id = await saveDraft();
-      if (id) toast.success('Zapisano szkic'); else toast.error('Błąd zapisu szkicu');
-    } finally { setBusy(false); }
+      if (id) toast.success("Zapisano szkic");
+      else toast.error("Błąd zapisu szkicu");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handlePublish = async () => {
-    if (!form.ean) { toast.error('Kaufland wymaga EAN (dopasowanie po EAN w katalogu)'); return; }
-    if (!form.id_shipping_group || !form.id_warehouse) { toast.error('Wybierz grupę wysyłki i magazyn'); return; }
+    if (!form.ean) {
+      toast.error("Kaufland wymaga EAN (dopasowanie po EAN w katalogu)");
+      return;
+    }
+    if (!form.id_shipping_group || !form.id_warehouse) {
+      toast.error("Wybierz grupę wysyłki i magazyn");
+      return;
+    }
     setBusy(true);
     setStatus(null);
     try {
       const id = draftId ?? (await saveDraft());
-      if (!id) { toast.error('Nie udało się zapisać szkicu'); return; }
+      if (!id) {
+        toast.error("Nie udało się zapisać szkicu");
+        return;
+      }
       const res = await fetch(`/api/marketplace/publish/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountId: SLUG, formData: form, basePrice: product.price_gross }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: SLUG,
+          formData: form,
+          basePrice: product.price_gross,
+        }),
       });
       const d = await res.json();
       if (res.ok && d.success) {
@@ -263,121 +389,226 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
         toast.success(`Wystawiono na ${MP_NAME} (unit ${ref})`);
         setStatus(`success:${ref}`);
       } else {
-        toast.error('Błąd publikacji');
-        setStatus(`error: ${d.details || d.error || 'nieznany'}`);
+        toast.error("Błąd publikacji");
+        setStatus(`error: ${d.details || d.error || "nieznany"}`);
       }
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleWithdraw = async () => {
     const ref = unitId;
-    if (!ref) { toast.error('Brak ID unitu — wystaw ofertę najpierw'); return; }
+    if (!ref) {
+      toast.error("Brak ID unitu — wystaw ofertę najpierw");
+      return;
+    }
     if (!confirm(`Wycofać ofertę (unit ${ref}) z ${MP_NAME}?`)) return;
     setBusy(true);
     try {
-      const res = await fetch('/api/marketplace/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/marketplace/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug: SLUG, ref }),
       });
       const d = await res.json();
-      if (res.ok && d.success) { toast.success(`Wycofano z ${MP_NAME}`); setUnitId(null); setStatus('withdrawn — unit usunięty'); }
-      else { toast.error('Błąd wycofania'); setStatus(`error: ${d.details || d.error || 'nieznany'}`); }
-    } finally { setBusy(false); }
+      if (res.ok && d.success) {
+        toast.success(`Wycofano z ${MP_NAME}`);
+        setUnitId(null);
+        setStatus("withdrawn — unit usunięty");
+      } else {
+        toast.error("Błąd wycofania");
+        setStatus(`error: ${d.details || d.error || "nieznany"}`);
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const overlayBusy = aiBusy !== null || loadingOpts || busy;
-  const overlayLabel = aiBusy === 'category' ? 'AI dopasowuje kategorię…'
-    : aiBusy === 'fill' ? 'AI wypełnia formularz…'
-    : loadingOpts ? 'Ładowanie opcji wysyłki/magazynu…'
-    : 'Przetwarzanie…';
+  const overlayLabel =
+    aiBusy === "category"
+      ? "AI dopasowuje kategorię…"
+      : aiBusy === "fill"
+        ? "AI wypełnia formularz…"
+        : loadingOpts
+          ? "Ładowanie opcji wysyłki/magazynu…"
+          : "Przetwarzanie…";
 
   return (
     <div className="card p-5 space-y-5 relative">
       <CrudOverlay show={overlayBusy} label={overlayLabel} accent="green" />
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-gray-800">Wystaw na {MP_NAME} (storefront PL)</h3>
+        <h3 className="font-semibold text-gray-800">
+          Wystaw na {MP_NAME} (storefront PL)
+        </h3>
         <span className="text-xs text-gray-400">model: units (EAN-match)</span>
       </div>
 
       {/* AI toolbar */}
       <div className="rounded-lg bg-green-50 border border-green-100 overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-          <span className="text-xs font-semibold text-green-700">Asystent AI:</span>
-          <button className="btn-secondary btn-sm" onClick={runSuggestCategory} disabled={aiBusy !== null}>
-            {aiBusy === 'category' ? 'Dopasowuję…' : '1. Dopasuj kategorię (AI)'}
+          <span className="text-xs font-semibold text-green-700">
+            Asystent AI:
+          </span>
+          <button
+            className="btn-secondary btn-sm"
+            onClick={runSuggestCategory}
+            disabled={aiBusy !== null}
+          >
+            {aiBusy === "category"
+              ? "Dopasowuję…"
+              : "1. Dopasuj kategorię (AI)"}
           </button>
           <button
-            className={`btn-sm px-3 font-semibold text-white ${aiBusy === 'fill' ? 'bg-green-500' : 'bg-green-600 hover:bg-green-700'} rounded-md disabled:opacity-50`}
+            className={`btn-sm px-3 font-semibold text-white ${aiBusy === "fill" ? "bg-green-500" : "bg-green-600 hover:bg-green-700"} rounded-md disabled:opacity-50`}
             onClick={runAiFill}
             disabled={aiBusy !== null}
           >
-            {aiBusy === 'fill' ? '✨ Wypełniam…' : '2. Wypełnij (AI)'}
+            {aiBusy === "fill" ? "✨ Wypełniam…" : "2. Wypełnij (AI)"}
           </button>
         </div>
-        {aiBusy === 'fill' && <div className="h-1 w-full bg-green-500 animate-pulse" />}
+        {aiBusy === "fill" && (
+          <div className="h-1 w-full bg-green-500 animate-pulse" />
+        )}
       </div>
 
       {/* Basic fields */}
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="label">Tytuł / nota oferty</label>
-          {aiBusy === 'fill' ? <Skel /> : (
-            <input className={`input${fc(form.title)}`} value={form.title} onChange={(e) => set({ title: e.target.value })} />
+          {aiBusy === "fill" ? (
+            <Skel />
+          ) : (
+            <input
+              className={`input${fc(form.title)}`}
+              value={form.title}
+              onChange={(e) => set({ title: e.target.value })}
+            />
           )}
         </div>
         <div>
           <label className="label">SKU oferty (id_offer)</label>
-          <input className={`input${fc(form.sku)}`} value={form.sku} onChange={(e) => set({ sku: e.target.value })} />
+          <input
+            className={`input${fc(form.sku)}`}
+            value={form.sku}
+            onChange={(e) => set({ sku: e.target.value })}
+          />
         </div>
         <div>
-          <label className="label">EAN <span className="text-red-500">*</span></label>
-          <input className={`input${fc(form.ean)}`} value={form.ean} onChange={(e) => set({ ean: e.target.value })} />
+          <label className="label">
+            EAN <span className="text-red-500">*</span>
+          </label>
+          <input
+            className={`input${fc(form.ean)}`}
+            value={form.ean}
+            onChange={(e) => set({ ean: e.target.value })}
+          />
         </div>
         <div>
           <label className="label">Cena (zł)</label>
-          <input type="number" step="0.01" className="input" value={form.price}
-            onChange={(e) => set({ price: parseFloat(e.target.value) || 0 })} />
+          <input
+            type="number"
+            step="0.01"
+            className="input"
+            value={form.price}
+            onChange={(e) => set({ price: parseFloat(e.target.value) || 0 })}
+          />
         </div>
         <div>
           <label className="label">Cena minimalna (zł, opcjonalnie)</label>
-          <input type="number" step="0.01" className="input" value={form.minimum_price}
-            onChange={(e) => set({ minimum_price: e.target.value === '' ? '' : parseFloat(e.target.value) })} />
+          <input
+            type="number"
+            step="0.01"
+            className="input"
+            value={form.minimum_price}
+            onChange={(e) =>
+              set({
+                minimum_price:
+                  e.target.value === "" ? "" : parseFloat(e.target.value),
+              })
+            }
+          />
         </div>
         <div>
           <label className="label">Ilość</label>
-          <input type="number" className="input" value={form.quantity}
-            onChange={(e) => set({ quantity: parseInt(e.target.value) || 0 })} />
+          <input
+            type="number"
+            className="input"
+            value={form.quantity}
+            onChange={(e) => set({ quantity: parseInt(e.target.value) || 0 })}
+          />
         </div>
         <div>
           <label className="label">Stan</label>
-          <select className="input" value={form.condition} onChange={(e) => set({ condition: e.target.value })}>
+          <select
+            className="input"
+            value={form.condition}
+            onChange={(e) => set({ condition: e.target.value })}
+          >
             <option value="NEW">Nowy</option>
             <option value="USED">Używany</option>
           </select>
         </div>
         <div>
           <label className="label">Czas przygotowania (dni)</label>
-          <input type="number" min={0} className="input" value={form.handling_time}
-            onChange={(e) => set({ handling_time: parseInt(e.target.value) || 0 })} />
+          <input
+            type="number"
+            min={0}
+            className="input"
+            value={form.handling_time}
+            onChange={(e) =>
+              set({ handling_time: parseInt(e.target.value) || 0 })
+            }
+          />
         </div>
         <div>
           <label className="label">Grupa wysyłki</label>
-          {loadingOpts ? <Skel /> : (
-            <select className={`input${fc(form.id_shipping_group)}`} value={form.id_shipping_group}
-              onChange={(e) => set({ id_shipping_group: e.target.value === '' ? '' : parseInt(e.target.value) })}>
+          {loadingOpts ? (
+            <Skel />
+          ) : (
+            <select
+              className={`input${fc(form.id_shipping_group)}`}
+              value={form.id_shipping_group}
+              onChange={(e) =>
+                set({
+                  id_shipping_group:
+                    e.target.value === "" ? "" : parseInt(e.target.value),
+                })
+              }
+            >
               <option value="">—</option>
-              {shippingGroups.map((g) => <option key={g.id} value={g.id}>{g.name}{g.isDefault ? ' (domyślna)' : ''}</option>)}
+              {shippingGroups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                  {g.isDefault ? " (domyślna)" : ""}
+                </option>
+              ))}
             </select>
           )}
         </div>
         <div>
           <label className="label">Magazyn</label>
-          {loadingOpts ? <Skel /> : (
-            <select className={`input${fc(form.id_warehouse)}`} value={form.id_warehouse}
-              onChange={(e) => set({ id_warehouse: e.target.value === '' ? '' : parseInt(e.target.value) })}>
+          {loadingOpts ? (
+            <Skel />
+          ) : (
+            <select
+              className={`input${fc(form.id_warehouse)}`}
+              value={form.id_warehouse}
+              onChange={(e) =>
+                set({
+                  id_warehouse:
+                    e.target.value === "" ? "" : parseInt(e.target.value),
+                })
+              }
+            >
               <option value="">—</option>
-              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}{w.isDefault ? ' (domyślny)' : ''}</option>)}
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                  {w.isDefault ? " (domyślny)" : ""}
+                </option>
+              ))}
             </select>
           )}
         </div>
@@ -385,32 +616,67 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
 
       {/* Description + Images — sent to Kaufland Product data catalog */}
       <div className="space-y-3">
-        <h4 className="text-xs font-semibold text-gray-500 uppercase">Opis i zdjęcia (Product data)</h4>
+        <h4 className="text-xs font-semibold text-gray-500 uppercase">
+          Opis i zdjęcia (Product data)
+        </h4>
         <div>
-          <label className="label">Opis <span className="text-gray-400 font-normal">(HTML, do 65 000 znaków)</span></label>
-          <textarea className={`input min-h-[90px]${form.description ? ' is-filled' : ''}`}
+          <label className="label">
+            Opis{" "}
+            <span className="text-gray-400 font-normal">
+              (HTML, do 65 000 znaków)
+            </span>
+          </label>
+          <textarea
+            className={`input min-h-[90px]${form.description ? " is-filled" : ""}`}
             value={form.description}
             onChange={(e) => set({ description: e.target.value })}
-            placeholder="Opis produktu widoczny na Kaufland.pl…" />
+            placeholder="Opis produktu widoczny na Kaufland.pl…"
+          />
         </div>
         <div>
-          <label className="label">Krótki opis <span className="text-gray-400 font-normal">(bez HTML, do 1 024 znaków)</span></label>
-          <textarea className={`input min-h-[60px]${form.short_description ? ' is-filled' : ''}`}
+          <label className="label">
+            Krótki opis{" "}
+            <span className="text-gray-400 font-normal">
+              (bez HTML, do 1 024 znaków)
+            </span>
+          </label>
+          <textarea
+            className={`input min-h-[60px]${form.short_description ? " is-filled" : ""}`}
             value={form.short_description}
             onChange={(e) => set({ short_description: e.target.value })}
-            placeholder="Krótkie podsumowanie najważniejszych cech produktu…" />
+            placeholder="Krótkie podsumowanie najważniejszych cech produktu…"
+          />
         </div>
         <div>
-          <label className="label">Zdjęcia <span className="text-gray-400 font-normal">(URL każdego w osobnej linii)</span></label>
-          <textarea className={`input min-h-[80px] font-mono text-xs${form.images.length ? ' is-filled' : ''}`}
-            value={form.images.join('\n')}
-            onChange={(e) => set({ images: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
-            placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg" />
+          <label className="label">
+            Zdjęcia{" "}
+            <span className="text-gray-400 font-normal">
+              (URL każdego w osobnej linii)
+            </span>
+          </label>
+          <textarea
+            className={`input min-h-[80px] font-mono text-xs${form.images.length ? " is-filled" : ""}`}
+            value={form.images.join("\n")}
+            onChange={(e) =>
+              set({
+                images: e.target.value
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+            placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"
+          />
           {form.images.length > 0 && (
             <div className="flex gap-2 mt-2 flex-wrap">
               {form.images.slice(0, 8).map((url, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={i} src={url} alt="" className="w-14 h-14 object-contain rounded border border-gray-200 bg-gray-50" />
+                <img
+                  key={i}
+                  src={url}
+                  alt=""
+                  className="w-14 h-14 object-contain rounded border border-gray-200 bg-gray-50"
+                />
               ))}
             </div>
           )}
@@ -421,20 +687,42 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
       <div className="space-y-2">
         <label className="label">Kategoria {MP_NAME}</label>
         <div className="flex gap-2">
-          <input className="input flex-1" value={phrase} placeholder="Szukaj kategorii…"
+          <input
+            className="input flex-1"
+            value={phrase}
+            placeholder="Szukaj kategorii…"
             onChange={(e) => setPhrase(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchCategories(); } }} />
-          <button className="btn-secondary btn-sm" onClick={searchCategories}>Szukaj</button>
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                searchCategories();
+              }
+            }}
+          />
+          <button className="btn-secondary btn-sm" onClick={searchCategories}>
+            Szukaj
+          </button>
         </div>
         {form.categoryCode && (
-          <p className="text-xs text-green-700">Wybrano: {form.categoryLabel} <span className="font-mono text-gray-400">({form.categoryCode})</span></p>
+          <p className="text-xs text-green-700">
+            Wybrano: {form.categoryLabel}{" "}
+            <span className="font-mono text-gray-400">
+              ({form.categoryCode})
+            </span>
+          </p>
         )}
         {categories.length > 0 && (
           <ul className="border border-gray-200 rounded-lg divide-y max-h-48 overflow-auto">
             {categories.map((c) => (
               <li key={c.code}>
-                <button className="w-full text-left px-3 py-2 text-sm hover:bg-green-50" onClick={() => selectCategory(c)}>
-                  {c.label} <span className="font-mono text-xs text-gray-400">{c.code}</span>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-green-50"
+                  onClick={() => selectCategory(c)}
+                >
+                  {c.label}{" "}
+                  <span className="font-mono text-xs text-gray-400">
+                    {c.code}
+                  </span>
                 </button>
               </li>
             ))}
@@ -446,18 +734,34 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
       {kAttributes.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <h4 className="text-xs font-semibold text-gray-500 uppercase">Atrybuty produktu</h4>
-            <span className="text-xs text-gray-400">(zapisywane w szkicu; edytuj też w Kaufland Seller Center → Product data)</span>
+            <h4 className="text-xs font-semibold text-gray-500 uppercase">
+              Atrybuty produktu
+            </h4>
+            <span className="text-xs text-gray-400">
+              (zapisywane w szkicu; edytuj też w Kaufland Seller Center →
+              Product data)
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {kAttributes.map((a) => (
               <div key={a.code}>
                 <label className="label">{a.label}</label>
                 <input
-                  className={`input${(form.attributes[a.code] ?? '') ? ' is-filled' : ''}`}
-                  value={(form.attributes[a.code] as string) || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, attributes: { ...f.attributes, [a.code]: e.target.value } }))}
-                  placeholder={a.type === 'SI_M' ? 'np. 50 cm' : a.type === 'SI_KG' ? 'np. 15 kg' : ''}
+                  className={`input${(form.attributes[a.code] ?? "") ? " is-filled" : ""}`}
+                  value={(form.attributes[a.code] as string) || ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      attributes: { ...f.attributes, [a.code]: e.target.value },
+                    }))
+                  }
+                  placeholder={
+                    a.type === "SI_M"
+                      ? "np. 50 cm"
+                      : a.type === "SI_KG"
+                        ? "np. 15 kg"
+                        : ""
+                  }
                 />
               </div>
             ))}
@@ -465,46 +769,74 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
         </div>
       )}
 
-      {status?.startsWith('success:') && (() => {
-        const ref = status.slice('success:'.length);
-        const portalUrl = `https://sellerportal.kaufland.de/product-data/${encodeURIComponent(form.ean)}/attributes?unitId=${ref}&storefront=pl`;
-        return (
-          <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-green-800">Oferta wystawiona na Kaufland</p>
-              <p className="text-xs text-green-700 mt-0.5">Unit ID: <span className="font-mono">{ref}</span> · EAN: {form.ean}</p>
+      {status?.startsWith("success:") &&
+        (() => {
+          const ref = status.slice("success:".length);
+          const portalUrl = `https://sellerportal.kaufland.de/product-data/${encodeURIComponent(form.ean)}/attributes?unitId=${ref}&storefront=pl`;
+          return (
+            <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-green-800">
+                  Oferta wystawiona na Kaufland
+                </p>
+                <p className="text-xs text-green-700 mt-0.5">
+                  Unit ID: <span className="font-mono">{ref}</span> · EAN:{" "}
+                  {form.ean}
+                </p>
+              </div>
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 btn-sm px-3 font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md text-xs"
+              >
+                Przejdź do produktu Kaufland →
+              </a>
             </div>
-            <a href={portalUrl} target="_blank" rel="noopener noreferrer"
-              className="shrink-0 btn-sm px-3 font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md text-xs">
-              Uzupełnij Product data →
-            </a>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
-      {status && !status.startsWith('success:') && (
-        <div className="text-sm rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-gray-700">{status}</div>
+      {status && !status.startsWith("success:") && (
+        <div className="text-sm rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-gray-700">
+          {status}
+        </div>
       )}
 
       {unitId && (
         <div className="flex items-center gap-2 text-xs text-gray-500 pt-1">
           <span className="font-mono text-gray-400">unit {unitId}</span>
-          <a href={`https://sellerportal.kaufland.de/product-data/${encodeURIComponent(form.ean)}/attributes?unitId=${unitId}&storefront=pl`}
-            target="_blank" rel="noopener noreferrer"
-            className="text-green-600 hover:underline font-medium">
+          <a
+            href={`https://sellerportal.kaufland.de/product-data/${encodeURIComponent(form.ean)}/attributes?unitId=${unitId}&storefront=pl`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-green-600 hover:underline font-medium"
+          >
             → Kaufland Product data
           </a>
         </div>
       )}
 
       <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-gray-100">
-        <button className="btn-secondary btn-sm text-red-600 hover:bg-red-50 mr-auto" onClick={handleWithdraw} disabled={busy || !unitId}>
+        <button
+          className="btn-secondary btn-sm text-red-600 hover:bg-red-50 mr-auto"
+          onClick={handleWithdraw}
+          disabled={busy || !unitId}
+        >
           Wycofaj z {MP_NAME}
         </button>
-        <button className="btn-secondary btn-sm" onClick={handleSaveDraft} disabled={busy}>Zapisz szkic</button>
-        <button className="btn-sm px-3 font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50"
-          onClick={handlePublish} disabled={busy}>
-          {busy ? '…' : `Wystaw na ${MP_NAME}`}
+        <button
+          className="btn-secondary btn-sm"
+          onClick={handleSaveDraft}
+          disabled={busy}
+        >
+          Zapisz szkic
+        </button>
+        <button
+          className="btn-sm px-3 font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50"
+          onClick={handlePublish}
+          disabled={busy}
+        >
+          {busy ? "…" : `Wystaw na ${MP_NAME}`}
         </button>
       </div>
     </div>
