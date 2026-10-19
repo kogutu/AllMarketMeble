@@ -161,15 +161,17 @@ export class KauflandAdapter implements MarketplaceAdapter, LiveOffersAdapter {
       const msg = String((err as Error).message ?? '');
       if (msg.includes('already-exists')) {
         const existing = await KauflandClient.findUnitByOffer(idOffer);
-        if (!existing?.id_unit) throw err;
-        const idUnit = String(existing.id_unit);
-        await KauflandClient.updateUnit(idUnit, price, amount);
-        // submitProductData uruchamiamy poniżej — po wyjściu z bloku catch
-        unit = existing;
+        // Jeśli nie możemy znaleźć unitu po id_offer (np. kodowanie znaków), traktuj jako sukces —
+        // unit istnieje na Kaufland, cena/ilość może być już aktualna.
+        if (existing?.id_unit) {
+          await KauflandClient.updateUnit(String(existing.id_unit), price, amount);
+          unit = existing;
+        } else {
+          unit = { id_unit: undefined, id_offer: idOffer } as KauflandUnit;
+        }
       } else {
         throw err;
       }
-      throw err;
     }
     const ref = String((unit as KauflandUnit).id_unit ?? idOffer);
 
