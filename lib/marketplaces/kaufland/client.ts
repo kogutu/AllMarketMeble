@@ -1,5 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Kaufland Seller API client (https://sellerapi.kaufland.com/v2).
@@ -34,19 +36,28 @@ async function request<T = unknown>(
   const url = `${BASE}${path}${qs}`;
   const body = data != null ? JSON.stringify(data) : '';
   const signature = sign(method, url, body, ts);
-  const res = await axios.request<T>({
-    method, url, data: data ?? undefined,
-    headers: {
-      'Shop-Client-Key': CLIENT_KEY,
-      'Shop-Timestamp': String(ts),
-      'Shop-Signature': signature,
-      Accept: 'application/json',
-      'User-Agent': 'mebel-panel/1.0',
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    timeout: 30000,
-  });
-  return res.data;
+  try {
+    const res = await axios.request<T>({
+      method, url, data: data ?? undefined,
+      headers: {
+        'Shop-Client-Key': CLIENT_KEY,
+        'Shop-Timestamp': String(ts),
+        'Shop-Signature': signature,
+        Accept: 'application/json',
+        'User-Agent': 'mebel-panel/1.0',
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      timeout: 30000,
+    });
+    return res.data;
+  } catch (err: unknown) {
+    const axErr = err as { response?: { status?: number; data?: unknown } };
+    if (axErr.response) {
+      const detail = JSON.stringify(axErr.response.data);
+      throw new Error(`Kaufland API ${method} ${path} → ${axErr.response.status}: ${detail}`);
+    }
+    throw err;
+  }
 }
 
 export interface KauflandUnit {
@@ -58,9 +69,15 @@ export interface KauflandUnit {
   listing_price?: number;       // minor units (grosze)
   amount?: number;
   condition?: string;
+  is_live?: boolean;            // false = unit exists but NOT visible on Kaufland.pl for customers
   product?: { title?: string; eans?: string[]; ean?: string | string[] };
   [k: string]: unknown;
 }
+
+// Cache całego drzewa kategorii (PL ~6000+). Trzyma w pamięci procesu serwera; TTL 1h.
+const CAT_TREE_TTL_MS = 60 * 60 * 1000;
+let _catTreeCache: { at: number; cats: KauflandCategory[] } | null = null;
+let _catTreeInFlight: Promise<KauflandCategory[]> | null = null;
 
 export const KauflandClient = {
   storefront: STOREFRONT,
@@ -86,12 +103,81 @@ export const KauflandClient = {
       { listing_price: Math.round(price * 100), amount });
   },
 
+  /** Find a unit by seller's id_offer. Returns null when not found. */
+  async findUnitByOffer(idOffer: string): Promise<KauflandUnit | null> {
+    try {
+      const data = await request<{ data?: KauflandUnit[] }>(
+        'GET', '/units', { storefront: STOREFRONT, id_offer: idOffer, limit: 1 });
+      return data.data?.[0] ?? null;
+    } catch { return null; }
+  },
+
   // ── Categories (storefront=pl required) ────────────────────────────────────
-  async getCategories(idParent?: number, limit = 200): Promise<KauflandCategory[]> {
-    const params: Record<string, string | number> = { storefront: STOREFRONT, limit };
-    if (idParent != null) params.id_parent_category = idParent;
-    const data = await request<{ data?: KauflandCategory[] }>('GET', '/categories', params);
-    return data.data ?? [];
+  /**
+   * Pobiera kategorie (dzieci `idParent` albo całe drzewo, gdy brak parenta).
+   * API Kauflandu twardo limituje `limit` do 100 (inaczej 400 „max 100"), a drzewo PL
+   * ma ~6000+ pozycji — więc stronicujemy przez `offset` aż do wyczerpania.
+   * `maxItems` ogranicza łączną liczbę (domyślnie bez limitu).
+   */
+  async getCategories(idParent?: number, maxItems = Infinity): Promise<KauflandCategory[]> {
+    const PAGE = 100; // twardy limit API
+    const out: KauflandCategory[] = [];
+    for (let offset = 0; out.length < maxItems; offset += PAGE) {
+      const params: Record<string, string | number> = { storefront: STOREFRONT, limit: PAGE, offset };
+      if (idParent != null) params.id_parent_category = idParent;
+      const data = await request<{ data?: KauflandCategory[]; pagination?: { total?: number } }>('GET', '/categories', params);
+      const batch = data.data ?? [];
+      out.push(...batch);
+      const total = Number(data.pagination?.total ?? out.length);
+      if (batch.length < PAGE || out.length >= total) break;
+    }
+    return Number.isFinite(maxItems) ? out.slice(0, maxItems) : out;
+  },
+
+  /**
+   * Całe drzewo kategorii (storefront PL) z cache w pamięci procesu — do wyszukiwania po frazie.
+   * Pierwsze pobranie stronicuje ~6000+ pozycji; strony po 1. pobieramy RÓWNOLEGLE (partiami),
+   * żeby skrócić czas dopasowania AI (wcześniej ~61 żądań sekwencyjnie). Współbieżny lot in-flight
+   * jest współdzielony, więc równoległe wywołania nie powielają pełnego pobrania.
+   */
+  async getAllCategories(force = false): Promise<KauflandCategory[]> {
+    if (!force && _catTreeCache && (Date.now() - _catTreeCache.at) < CAT_TREE_TTL_MS) return _catTreeCache.cats;
+    // Snapshot z dysku (mirakl_data/kaufland/categories.json) — natychmiastowy, bez żądań do API.
+    // Odświeżaj: `node scripts/fetch-kaufland-categories.js`. API to tylko fallback, gdy brak pliku.
+    if (!force) {
+      try {
+        const file = path.join(process.cwd(), 'mirakl_data', 'kaufland', 'categories.json');
+        const cats = JSON.parse(fs.readFileSync(file, 'utf8')) as KauflandCategory[];
+        if (Array.isArray(cats) && cats.length) {
+          _catTreeCache = { at: Date.now(), cats };
+          return cats;
+        }
+      } catch { /* brak snapshotu → fallback do API poniżej */ }
+    }
+    if (!force && _catTreeInFlight) return _catTreeInFlight;
+    const PAGE = 100, CONCURRENCY = 8;
+    const fetchPage = async (offset: number): Promise<KauflandCategory[]> => {
+      const data = await request<{ data?: KauflandCategory[]; pagination?: { total?: number } }>(
+        'GET', '/categories', { storefront: STOREFRONT, limit: PAGE, offset });
+      return data.data ?? [];
+    };
+    const load = (async () => {
+      // 1. strona — poznajemy `total`, resztę liczymy z offsetów.
+      const firstData = await request<{ data?: KauflandCategory[]; pagination?: { total?: number } }>(
+        'GET', '/categories', { storefront: STOREFRONT, limit: PAGE, offset: 0 });
+      const out: KauflandCategory[] = [...(firstData.data ?? [])];
+      const total = Number(firstData.pagination?.total ?? out.length);
+      const offsets: number[] = [];
+      for (let o = PAGE; o < total; o += PAGE) offsets.push(o);
+      for (let i = 0; i < offsets.length; i += CONCURRENCY) {
+        const pages = await Promise.all(offsets.slice(i, i + CONCURRENCY).map((o) => fetchPage(o).catch(() => [])));
+        for (const p of pages) out.push(...p);
+      }
+      _catTreeCache = { at: Date.now(), cats: out };
+      return out;
+    })();
+    _catTreeInFlight = load;
+    try { return await load; } finally { _catTreeInFlight = null; }
   },
 
   async getCategory(idCategory: number): Promise<KauflandCategory | null> {
@@ -120,10 +206,10 @@ export const KauflandClient = {
     return data.data ?? [];
   },
 
-  /** Create an offer (unit). Prices in PLN are converted to grosze. Product is EAN-matched in catalog. */
+  /** Create an offer (unit). Prices in PLN are converted to grosze. Product is EAN-matched in catalog.
+   *  storefront ONLY in query params (400 if also in body). id_category not accepted by POST /units. */
   async createUnit(input: KauflandCreateUnit): Promise<KauflandUnit> {
     const body: Record<string, unknown> = {
-      storefront: STOREFRONT,
       id_offer: input.id_offer,
       ean: input.ean,
       condition: input.condition ?? 'NEW',
@@ -135,7 +221,7 @@ export const KauflandClient = {
     };
     if (input.minimum_price != null) body.minimum_price = Math.round(input.minimum_price * 100);
     if (input.note) body.note = input.note;
-    if (input.id_category != null) body.id_category = input.id_category;
+    // id_category → excess property rejected by API (POST /units body schema)
     const data = await request<{ data?: KauflandUnit }>('POST', '/units', { storefront: STOREFRONT }, body);
     return (data.data ?? data) as KauflandUnit;
   },
@@ -159,5 +245,6 @@ export interface KauflandWarehouse { id_warehouse: number; name: string; is_defa
 export interface KauflandCreateUnit {
   id_offer: string; ean: string; price: number; amount: number;
   condition?: string; minimum_price?: number; handling_time?: number; note?: string;
-  id_shipping_group: number; id_warehouse: number; id_category?: number;
+  id_shipping_group: number; id_warehouse: number;
+  // id_category removed — POST /units rejects it as excess property
 }

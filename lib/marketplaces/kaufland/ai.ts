@@ -4,7 +4,8 @@ import type { MarketplaceCategory } from '@/lib/marketplaces/types';
 
 let client: OpenAI | null = null;
 function getClient(): OpenAI {
-  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  // Timeout + retry, żeby wolne/wiszące wywołanie AI nie blokowało formularza w nieskończoność.
+  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 30000, maxRetries: 2 });
   return client;
 }
 

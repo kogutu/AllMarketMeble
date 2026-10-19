@@ -20,8 +20,18 @@ export async function POST(req: NextRequest) {
 
     const adapter = await KauflandAdapter.create('kaufland');
 
-    // Collect candidates from a few phrases (name words + kind).
-    const phrases = [product.kind, ...(product.name || '').split(/\s+/).slice(0, 3)].filter(Boolean) as string[];
+    // Zbierz kandydatów z kilku fraz. Tokenizujemy po spacjach/myślnikach/interpunkcji
+    // (np. „Stolik-kawowy alpin-b biały," → stolik, kawowy, alpin, biały) i odrzucamy
+    // kolory/słowa-śmieci oraz tokeny <3 znaki, by trafiać w nazwy kategorii, a nie kolory.
+    const STOP = new Set(['bialy', 'bialy,', 'czarny', 'szary', 'brazowy', 'bezowy', 'zielony', 'niebieski',
+      'czerwony', 'zloty', 'srebrny', 'podstawa', 'nogi', 'noga', 'rama', 'kolor', 'mat', 'polysk', 'dab', 'buk']);
+    const norm = (s: string) => s.toLowerCase()
+      .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l')
+      .replace(/ń/g, 'n').replace(/ó/g, 'o').replace(/ś/g, 's').replace(/[źż]/g, 'z');
+    const nameTokens = (product.name || '').split(/[\s\-_,.;:/()]+/).filter(Boolean)
+      .filter((t) => t.length >= 3 && !STOP.has(norm(t)));
+    // Frazy: całe źródłowe `kind`, pełna nazwa (dopasowanie tokenowe), potem pojedyncze tokeny.
+    const phrases = [product.kind, product.name, ...nameTokens].filter(Boolean) as string[];
     const seen = new Set<string>();
     const candidates = [] as Awaited<ReturnType<typeof adapter.searchCategories>>;
     for (const ph of phrases) {

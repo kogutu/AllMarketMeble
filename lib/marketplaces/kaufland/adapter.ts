@@ -4,6 +4,14 @@ import type {
   OfferDraft, PublishOutcome, LiveStatus, LiveOfferRow, LiveOffersAdapter,
 } from '@/lib/marketplaces/types';
 
+/** Normalizacja do dopasowań: małe litery, bez diakrytyk, interpunkcja → spacja. */
+function normCat(s: string): string {
+  return (s || '').toLowerCase()
+    .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e').replace(/ł/g, 'l')
+    .replace(/ń/g, 'n').replace(/ó/g, 'o').replace(/ś/g, 's').replace(/[źż]/g, 'z')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function toCategory(c: KauflandCategory): MarketplaceCategory {
   return {
     code: String(c.id_category),
@@ -37,7 +45,10 @@ export class KauflandAdapter implements MarketplaceAdapter, LiveOffersAdapter {
       total,
       offers: units.map((u): LiveOfferRow => {
         const id = String(u.id_unit ?? '');
-        const active = (u.status ?? '').toUpperCase() === 'AVAILABLE' && (u.amount ?? 0) > 0;
+        // is_live: false → unit istnieje w API ale NIE jest widoczny na Kaufland.pl (brak atrybutów,
+        // oczekuje na zatwierdzenie katalogu itp.) → traktuj jako inactive (żółta kropka, nie zielona).
+        const available = (u.status ?? '').toUpperCase() === 'AVAILABLE' && (u.amount ?? 0) > 0;
+        const active = available && u.is_live !== false;
         return {
           ref: id, offerId: id, sku: u.id_offer ?? id,
           ean: firstEan(u),
@@ -65,23 +76,50 @@ export class KauflandAdapter implements MarketplaceAdapter, LiveOffersAdapter {
     return cats.map(toCategory);
   }
 
-  /** Kaufland has no category search endpoint — fetch a wide page and filter by title. */
+  /**
+   * Kaufland has no category search endpoint — fetch the full (cached) tree and filter by title.
+   * Dopasowanie odporne na interpunkcję/diakrytyki: „Stolik-kawowy", „biały," itd. są normalizowane,
+   * a wynik punktowany po liczbie trafionych tokenów (pełna fraza jako podłańcuch = bonus).
+   */
   async searchCategories(phrase: string): Promise<MarketplaceCategory[]> {
-    const cats = await KauflandClient.getCategories(undefined, 1000);
-    const p = phrase.toLowerCase();
-    return cats
-      .filter((c) => (c.title_singular || c.name || '').toLowerCase().includes(p) || (c.title_plural || '').toLowerCase().includes(p))
-      .filter((c) => c.is_leaf)
-      .slice(0, 50)
-      .map(toCategory);
+    const cats = await KauflandClient.getAllCategories();
+    const q = normCat(phrase);
+    if (!q) return [];
+    const tokens = q.split(' ').filter((t) => t.length >= 3);
+    const scored: { c: KauflandCategory; score: number }[] = [];
+    for (const c of cats) {
+      if (!c.is_leaf) continue;
+      const t = normCat(`${c.title_singular || ''} ${c.name || ''} ${c.title_plural || ''}`);
+      if (!t) continue;
+      const hits = tokens.filter((tok) => t.includes(tok)).length;
+      const full = t.includes(q);
+      // Brak tokenów ≥3 znaki → dopasuj po pełnej frazie; inaczej wymagaj ≥1 trafionego tokenu.
+      const score = (full ? 3 : 0) + hits;
+      if (tokens.length === 0 ? full : score > 0) scored.push({ c, score });
+    }
+    return scored.sort((a, b) => b.score - a.score).slice(0, 50).map((s) => toCategory(s.c));
   }
 
   /**
-   * Kaufland exposes a single global attribute catalog (no per-category required schema).
-   * We surface the most relevant offer-level fields as "attributes" for the form/AI; nothing
-   * is marked required by the API, so create relies on the unit fields directly.
+   * Kaufland API nie ma per-kategoria schematu wymaganych atrybutów (`id_category` na `/attributes`
+   * nie filtruje — zwraca cały katalog 727 globalnych pozycji). Zwracamy zestaw standardowy dla
+   * mebli. Wartości przechowywane w szkicu; Kaufland Seller Center wymaga uzupełnienia „Product data"
+   * ręcznie (endpoint /product-data → 404 — edycja katalogu produktów nie jest dostępna via API).
    */
-  async getCategoryAttributes(): Promise<MarketplaceAttribute[]> { return []; }
+  async getCategoryAttributes(): Promise<MarketplaceAttribute[]> {
+    return [
+      { code: 'manufacturer',  label: 'Producent',                    type: 'TEXT',  required: false },
+      { code: 'mpn',           label: 'Numer producenta (MPN)',        type: 'TEXT',  required: false },
+      { code: 'colour',        label: 'Kolor',                         type: 'TEXT',  required: false, multiple: true },
+      { code: 'material',      label: 'Materiał',                      type: 'TEXT',  required: false, multiple: true },
+      { code: 'wood_type',     label: 'Rodzaj drewna / mat. dekor.',   type: 'TEXT',  required: false },
+      { code: 'width',         label: 'Szerokość (np. 50 cm)',         type: 'SI_M',  required: false },
+      { code: 'height',        label: 'Wysokość (np. 75 cm)',          type: 'SI_M',  required: false },
+      { code: 'depth',         label: 'Głębokość (np. 45 cm)',         type: 'SI_M',  required: false },
+      { code: 'length',        label: 'Długość (np. 120 cm)',          type: 'SI_M',  required: false },
+      { code: 'weight',        label: 'Waga (np. 15 kg)',              type: 'SI_KG', required: false },
+    ];
+  }
 
   async publish(draft: OfferDraft): Promise<PublishOutcome> {
     const f = draft.formData as Record<string, unknown>;
@@ -102,19 +140,34 @@ export class KauflandAdapter implements MarketplaceAdapter, LiveOffersAdapter {
       idWarehouse = (whs.find((w) => w.is_default) ?? whs[0])?.id_warehouse ?? 0;
     }
 
-    const unit = await KauflandClient.createUnit({
-      id_offer: idOffer,
-      ean,
-      price: Number(f.price ?? draft.basePrice ?? 0),
-      amount: Number(f.quantity ?? f.amount ?? 1),
-      condition: String(f.condition ?? 'NEW'),
-      minimum_price: f.minimum_price != null ? Number(f.minimum_price) : undefined,
-      handling_time: f.handling_time != null ? Number(f.handling_time) : 1,
-      note: f.title ? String(f.title) : undefined,
-      id_shipping_group: idShipping,
-      id_warehouse: idWarehouse,
-      id_category: f.categoryCode != null ? Number(f.categoryCode) : undefined,
-    });
+    const price = Number(f.price ?? draft.basePrice ?? 0);
+    const amount = Number(f.quantity ?? f.amount ?? 1);
+    let unit: Awaited<ReturnType<typeof KauflandClient.createUnit>>;
+    try {
+      unit = await KauflandClient.createUnit({
+        id_offer: idOffer,
+        ean,
+        price,
+        amount,
+        condition: String(f.condition ?? 'NEW'),
+        minimum_price: f.minimum_price != null && f.minimum_price !== '' && Number(f.minimum_price) > 0 ? Number(f.minimum_price) : undefined,
+        handling_time: f.handling_time != null ? Number(f.handling_time) : 1,
+        note: f.title ? String(f.title) : undefined,
+        id_shipping_group: idShipping,
+        id_warehouse: idWarehouse,
+      });
+    } catch (err: unknown) {
+      // Jeśli unit już istnieje → zaktualizuj cenę i ilość zamiast tworzyć duplikat.
+      const msg = String((err as Error).message ?? '');
+      if (msg.includes('already-exists')) {
+        const existing = await KauflandClient.findUnitByOffer(idOffer);
+        if (!existing?.id_unit) throw err;
+        const idUnit = String(existing.id_unit);
+        await KauflandClient.updateUnit(idUnit, price, amount);
+        return { ref: idUnit, status: 'active', raw: existing as Record<string, unknown> };
+      }
+      throw err;
+    }
     const ref = String(unit.id_unit ?? idOffer);
     return { ref, status: 'active', raw: unit as Record<string, unknown> };
   }

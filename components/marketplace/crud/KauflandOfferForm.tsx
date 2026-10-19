@@ -16,6 +16,7 @@ const MP_NAME = 'Kaufland';
 
 interface Category { code: string; label: string; leaf: boolean; }
 interface Option { id: number; name: string; isDefault: boolean; }
+interface KAttr { code: string; label: string; type: string; required: boolean; multiple?: boolean; }
 
 interface KForm {
   title: string;
@@ -30,6 +31,7 @@ interface KForm {
   id_warehouse: number | '';
   categoryCode: string;
   categoryLabel: string;
+  attributes: Record<string, string>;
 }
 
 function Skel({ h = 'h-9' }: { h?: string }) {
@@ -50,7 +52,9 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
     id_warehouse: '',
     categoryCode: '',
     categoryLabel: '',
+    attributes: {},
   }));
+  const [kAttributes, setKAttributes] = useState<KAttr[]>([]);
 
   const [phrase, setPhrase] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
@@ -69,7 +73,36 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
   // Klasa podświetlenia pola z wprowadzoną wartością.
   const fc = (v: unknown) => (Array.isArray(v) ? v.length > 0 : v !== '' && v != null && v !== 0) ? ' is-filled' : '';
 
-  // Load shipping groups + warehouses once (defaults to is_default).
+  // Pre-fill product attributes from Typesense product data.
+  const prefillAttrs = (attrs: KAttr[]): Record<string, string> => {
+    const pAttrs = (product.attrs || {}) as Record<string, unknown>;
+    const dims = (product as unknown as Record<string, unknown>);
+    const dimItems = (dims.dimensions as { items?: { s?: string; w?: string; d?: string }[] } | undefined)?.items?.[0];
+    const str = (k: string) => String(pAttrs[k] ?? '');
+    const dim = (keys: string[]): string => {
+      for (const k of keys) { const v = str(k); if (v && v !== '0') return `${v} cm`; }
+      return '';
+    };
+    const out: Record<string, string> = {};
+    for (const a of attrs) {
+      switch (a.code) {
+        case 'manufacturer': out[a.code] = process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || 'Mebel Partner'; break;
+        case 'mpn':          out[a.code] = product.sku || String(product.id); break;
+        case 'colour':       out[a.code] = str('kolor_blatu') || str('kolor') || (product.color?.name || ''); break;
+        case 'material':     out[a.code] = str('materiał_blatu') || str('material_blatu') || str('tkanina') || str('materiał') || ''; break;
+        case 'wood_type':    out[a.code] = str('materiał_podstawy') || str('material_podstawy') || ''; break;
+        case 'width':        out[a.code] = dim(['szerokość','szerokosc']) || (dimItems?.s ? `${dimItems.s} cm` : ''); break;
+        case 'height':       out[a.code] = dim(['wysokość','wysokosc']); break;
+        case 'depth':        out[a.code] = dim(['długość_siedziska','glebokosc']) || (dimItems?.d ? `${dimItems.d} cm` : ''); break;
+        case 'length':       out[a.code] = dim(['długość','dlugosc']) || (dimItems?.s ? `${dimItems.s} cm` : ''); break;
+        case 'weight':       { const w = str('waga_produktu_kg') || String((dims.dimensions as { weight?: string } | undefined)?.weight ?? ''); out[a.code] = w ? `${w} kg` : ''; break; }
+      }
+      if (!out[a.code]) delete out[a.code];
+    }
+    return out;
+  };
+
+  // Load shipping groups, warehouses and product attributes.
   const loadOptions = async (categoryCode: string) => {
     setLoadingOpts(true);
     try {
@@ -77,12 +110,16 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
       const d = await res.json();
       const sg: Option[] = d.shippingGroups || [];
       const wh: Option[] = d.warehouses || [];
+      const attrs: KAttr[] = d.attributes || [];
       setShippingGroups(sg);
       setWarehouses(wh);
+      setKAttributes(attrs);
+      const prefilled = prefillAttrs(attrs);
       setForm((f) => ({
         ...f,
         id_shipping_group: f.id_shipping_group || (sg.find((g) => g.isDefault) ?? sg[0])?.id || '',
         id_warehouse: f.id_warehouse || (wh.find((w) => w.isDefault) ?? wh[0])?.id || '',
+        attributes: { ...prefilled, ...f.attributes },
       }));
     } finally {
       setLoadingOpts(false);
@@ -209,9 +246,10 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
       });
       const d = await res.json();
       if (res.ok && d.success) {
-        setUnitId(d.ref || null);
-        toast.success(`Wystawiono na ${MP_NAME}`);
-        setStatus(`active — unit ${d.ref}`);
+        const ref = d.ref || null;
+        setUnitId(ref);
+        toast.success(`Wystawiono na ${MP_NAME} (unit ${ref})`);
+        setStatus(`success:${ref}`);
       } else {
         toast.error('Błąd publikacji');
         setStatus(`error: ${d.details || d.error || 'nieznany'}`);
@@ -358,8 +396,59 @@ export default function KauflandOfferForm({ product }: { product: MebleProduct }
         )}
       </div>
 
-      {status && (
+      {/* Product attributes (Kaufland „Product data" — stored in draft; fill in Seller Center for catalog update) */}
+      {kAttributes.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase">Atrybuty produktu</h4>
+            <span className="text-xs text-gray-400">(zapisywane w szkicu; edytuj też w Kaufland Seller Center → Product data)</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {kAttributes.map((a) => (
+              <div key={a.code}>
+                <label className="label">{a.label}</label>
+                <input
+                  className={`input${(form.attributes[a.code] ?? '') ? ' is-filled' : ''}`}
+                  value={(form.attributes[a.code] as string) || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, attributes: { ...f.attributes, [a.code]: e.target.value } }))}
+                  placeholder={a.type === 'SI_M' ? 'np. 50 cm' : a.type === 'SI_KG' ? 'np. 15 kg' : ''}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {status?.startsWith('success:') && (() => {
+        const ref = status.slice('success:'.length);
+        const portalUrl = `https://sellerportal.kaufland.de/product-data/${encodeURIComponent(form.ean)}/attributes?unitId=${ref}&storefront=pl`;
+        return (
+          <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-green-800">Oferta wystawiona na Kaufland</p>
+              <p className="text-xs text-green-700 mt-0.5">Unit ID: <span className="font-mono">{ref}</span> · EAN: {form.ean}</p>
+            </div>
+            <a href={portalUrl} target="_blank" rel="noopener noreferrer"
+              className="shrink-0 btn-sm px-3 font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md text-xs">
+              Uzupełnij Product data →
+            </a>
+          </div>
+        );
+      })()}
+
+      {status && !status.startsWith('success:') && (
         <div className="text-sm rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-gray-700">{status}</div>
+      )}
+
+      {unitId && (
+        <div className="flex items-center gap-2 text-xs text-gray-500 pt-1">
+          <span className="font-mono text-gray-400">unit {unitId}</span>
+          <a href={`https://sellerportal.kaufland.de/product-data/${encodeURIComponent(form.ean)}/attributes?unitId=${unitId}&storefront=pl`}
+            target="_blank" rel="noopener noreferrer"
+            className="text-green-600 hover:underline font-medium">
+            → Kaufland Product data
+          </a>
+        </div>
       )}
 
       <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-gray-100">
