@@ -103,7 +103,9 @@ export const KauflandClient = {
 
   async getUnit(idUnit: string): Promise<KauflandUnit | null> {
     try {
-      const data = await request<{ data?: KauflandUnit }>('GET', `/units/${encodeURIComponent(idUnit)}`, { storefront: STOREFRONT });
+      // `embedded=products` dokłada EAN i tytuł z katalogu — bez tego samo `/units/{id}` ich nie zwraca.
+      const data = await request<{ data?: KauflandUnit }>(
+        'GET', `/units/${encodeURIComponent(idUnit)}`, { storefront: STOREFRONT, embedded: 'products' });
       return data.data ?? null;
     } catch { return null; }
   },
@@ -118,7 +120,7 @@ export const KauflandClient = {
   async findUnitByOffer(idOffer: string): Promise<KauflandUnit | null> {
     try {
       const data = await request<{ data?: KauflandUnit[] }>(
-        'GET', '/units', { storefront: STOREFRONT, id_offer: idOffer, limit: 1 });
+        'GET', '/units', { storefront: STOREFRONT, id_offer: idOffer, limit: 1, embedded: 'products' });
       return data.data?.[0] ?? null;
     } catch { return null; }
   },

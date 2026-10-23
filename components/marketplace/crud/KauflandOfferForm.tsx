@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import type { MebleProduct } from "@/types";
 import CrudOverlay from "./CrudOverlay";
@@ -64,6 +65,33 @@ interface KForm {
   images: string[];
 }
 
+/** Wiersz z `/api/offers` — tylko pola, których tu potrzebujemy. */
+interface OfferRow {
+  id: number;
+  marketplace?: string | null;
+  account_id?: string | null;
+  allegro_offer_id?: string | null;
+  category_id?: string | null;
+  form_data?: unknown;
+}
+
+/** Oferta (unit) odczytana z Kauflandu — `/api/kaufland/unit`. */
+interface LiveUnit {
+  idUnit: string | null;
+  idOffer: string | null;
+  ean: string | null;
+  title: string | null;
+  price: number | null;
+  minimumPrice: number | null;
+  quantity: number | null;
+  condition: string | null;
+  handlingTime: number | null;
+  idShippingGroup: number | null;
+  idWarehouse: number | null;
+  status: string | null;
+  isLive: boolean | null;
+}
+
 function Skel({ h = "h-9" }: { h?: string }) {
   return (
     <div
@@ -103,6 +131,9 @@ export default function KauflandOfferForm({
         : [],
   }));
   const [kAttributes, setKAttributes] = useState<KAttr[]>([]);
+  // `?edit=1` z siatki produktów = oferta już jest na Kauflandzie, wchodzimy ją edytować.
+  const editMode = useSearchParams().has("edit");
+  const [loadingDraft, setLoadingDraft] = useState(true);
 
   const [phrase, setPhrase] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
@@ -111,6 +142,10 @@ export default function KauflandOfferForm({
   const [loadingOpts, setLoadingOpts] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(null);
   const [unitId, setUnitId] = useState<string | null>(null);
+  const [unitMeta, setUnitMeta] = useState<{
+    status: string | null;
+    isLive: boolean | null;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState<null | "category" | "fill">(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -118,6 +153,9 @@ export default function KauflandOfferForm({
   const [pdBusy, setPdBusy] = useState(false);
   const autoSuggestedRef = useRef(false);
   const autoFillForRef = useRef("");
+  // Wczytany szkic/oferta → AI nie rusza automatycznie, żeby nie nadpisać zapisanych danych.
+  const draftRestoredRef = useRef(false);
+  const pdCheckedRef = useRef(false);
 
   const set = (patch: Partial<KForm>) => setForm((f) => ({ ...f, ...patch }));
   // Klasa podświetlenia pola z wprowadzoną wartością.
@@ -132,8 +170,7 @@ export default function KauflandOfferForm({
     const dims = product as unknown as Record<string, unknown>;
     const dimItems = (
       dims.dimensions as
-        | { items?: { s?: string; w?: string; d?: string }[] }
-        | undefined
+        { items?: { s?: string; w?: string; d?: string }[] } | undefined
     )?.items?.[0];
     const str = (k: string) => String(pAttrs[k] ?? "");
     const dim = (keys: string[]): string => {
@@ -233,9 +270,122 @@ export default function KauflandOfferForm({
     }
   };
 
+  // Opcje oferty i schemat atrybutów zależą od kategorii — przeładuj przy każdej jej zmianie.
+  // Pusty kod przy wejściu = wczytanie samych grup wysyłki/magazynów (API podstawia kategorię
+  // zastępczą); bez tego efektu atrybuty zostawały te z kategorii zastępczej, nie z wybranej.
   useEffect(() => {
-    loadOptions(""); /* load defaults early */ // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void loadOptions(form.categoryCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.categoryCode]);
+
+  /**
+   * Wczytanie istniejącej oferty. Bez tego wejście w edycję (`?edit=1`) renderowało świeży
+   * formularz z danych produktu — zapisany szkic, unit i werdykt Kauflandu nie pojawiały się wcale.
+   * Kolejność źródeł: lokalny szkic (`form_data`) → żywy unit z API Kauflandu.
+   */
+  useEffect(() => {
+    let current = true;
+    (async () => {
+      try {
+        const d = await fetch(
+          `/api/offers?typesense_id=${encodeURIComponent(String(product.id))}`,
+        ).then((r) => r.json());
+        if (!current) return;
+
+        const offers = (d?.offers || []) as OfferRow[];
+        const offer =
+          offers.find((o) => o.marketplace === SLUG || o.account_id === SLUG) ??
+          null;
+        // `accountOffers` dotyczy tylko pierwszej oferty w odpowiedzi (może być z Allegro),
+        // więc rekordy publikacji bierzemy z mapy po id naszej oferty.
+        type AccountRow = {
+          account_id: string;
+          allegro_offer_id: string | null;
+        };
+        const byOffer = (d?.offerAccountsMap || {}) as Record<
+          string,
+          AccountRow[]
+        >;
+        const accounts: AccountRow[] = offer
+          ? (byOffer[String(offer.id)] ?? [])
+          : Object.values(byOffer).flat();
+        let ref =
+          offer?.allegro_offer_id ||
+          accounts.find((a) => a.account_id === SLUG)?.allegro_offer_id ||
+          null;
+
+        if (offer) {
+          setDraftId(offer.id);
+          let raw: unknown = offer.form_data;
+          if (typeof raw === "string") {
+            try {
+              raw = JSON.parse(raw);
+            } catch {
+              raw = null;
+            }
+          }
+          if (raw && typeof raw === "object") {
+            const saved = raw as Partial<KForm>;
+            draftRestoredRef.current = true;
+            setForm((f) => ({
+              ...f,
+              ...saved,
+              attributes: { ...f.attributes, ...(saved.attributes || {}) },
+            }));
+            if (saved.categoryCode) {
+              // Kategoria pochodzi z zapisu — nie wołaj po nią AI ponownie.
+              autoFillForRef.current = saved.categoryCode;
+              setPhrase(saved.categoryLabel || saved.categoryCode);
+            }
+          } else if (offer.category_id) {
+            setForm((f) => ({ ...f, categoryCode: String(offer.category_id) }));
+          }
+        }
+
+        // Oferta mogła powstać poza formularzem (masowe dodawanie, synchronizacja) — wtedy
+        // jedynym źródłem ceny, stanu i grupy wysyłki jest unit w API Kauflandu.
+        if (ref || editMode) {
+          const qs = ref
+            ? `idUnit=${encodeURIComponent(ref)}`
+            : `idOffer=${encodeURIComponent(product.sku || String(product.id))}`;
+          const u = await fetch(`/api/kaufland/unit?${qs}`)
+            .then((r) => r.json())
+            .catch(() => null);
+          if (!current) return;
+          const unit = (u?.unit ?? null) as LiveUnit | null;
+          if (unit) {
+            ref = unit.idUnit || ref;
+            setUnitMeta({ status: unit.status, isLive: unit.isLive });
+            if (!draftRestoredRef.current) {
+              draftRestoredRef.current = true; // stan z Kauflandu też jest danymi — AI go nie nadpisuje
+              setForm((f) => ({
+                ...f,
+                title: unit.title || f.title,
+                sku: unit.idOffer || f.sku,
+                ean: unit.ean || f.ean,
+                price: unit.price ?? f.price,
+                minimum_price: unit.minimumPrice ?? f.minimum_price,
+                quantity: unit.quantity ?? f.quantity,
+                condition: unit.condition || f.condition,
+                handling_time: unit.handlingTime ?? f.handling_time,
+                id_shipping_group: unit.idShippingGroup ?? f.id_shipping_group,
+                id_warehouse: unit.idWarehouse ?? f.id_warehouse,
+              }));
+            }
+          }
+        }
+        if (ref) setUnitId(ref);
+      } catch {
+        /* brak szkicu / błąd API — formularz zostaje na danych produktu */
+      } finally {
+        if (current) setLoadingDraft(false);
+      }
+    })();
+    return () => {
+      current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id]);
 
   const searchCategories = async () => {
     if (!phrase.trim()) return;
@@ -330,16 +480,18 @@ export default function KauflandOfferForm({
     }
   };
 
+  // AI startuje dopiero po sprawdzeniu, czy jest co edytować — i nigdy, gdy coś wczytaliśmy.
   useEffect(() => {
-    if (!autoSuggestedRef.current) {
-      autoSuggestedRef.current = true;
-      runSuggestCategory();
-    }
+    if (loadingDraft || autoSuggestedRef.current) return;
+    autoSuggestedRef.current = true;
+    if (draftRestoredRef.current) return;
+    runSuggestCategory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadingDraft]);
 
   // Po dopasowaniu/wyborze kategorii → automatycznie uruchom AI „Wypełnij”.
   useEffect(() => {
+    if (loadingDraft) return;
     if (
       form.categoryCode &&
       autoFillForRef.current !== form.categoryCode &&
@@ -349,25 +501,30 @@ export default function KauflandOfferForm({
       runAiFill();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.categoryCode]);
+  }, [form.categoryCode, loadingDraft]);
 
   const saveDraft = async (): Promise<number | null> => {
-    const res = await fetch("/api/offers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        typesense_id: String(product.id),
-        typesense_collection:
-          process.env.NEXT_PUBLIC_TYPESENSE_COLLECTION || "meble",
-        marketplace: SLUG,
-        form_data: form,
-        title: form.title,
-        description: "",
-        price: form.price,
-        quantity: form.quantity,
-        category_id: form.categoryCode,
-      }),
-    });
+    // Wystawiona oferta ma status `active`, więc POST /api/offers nie znalazłby jej jako szkicu
+    // i wstawiłby duplikat — mając jej id aktualizujemy ten sam wiersz.
+    const res = await fetch(
+      draftId ? `/api/offers/${draftId}` : "/api/offers",
+      {
+        method: draftId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          typesense_id: String(product.id),
+          typesense_collection:
+            process.env.NEXT_PUBLIC_TYPESENSE_COLLECTION || "meble",
+          marketplace: SLUG,
+          form_data: form,
+          title: form.title,
+          description: "",
+          price: form.price,
+          quantity: form.quantity,
+          category_id: form.categoryCode,
+        }),
+      },
+    );
     const d = await res.json();
     if (d?.id) {
       setDraftId(d.id);
@@ -406,6 +563,16 @@ export default function KauflandOfferForm({
       setPdBusy(false);
     }
   };
+
+  // W edycji werdykt danych produktowych ma być od razu widoczny — wcześniej panel stał pusty
+  // do ręcznego kliknięcia „Sprawdź w Kauflandzie".
+  useEffect(() => {
+    if (loadingDraft || pdCheckedRef.current) return;
+    if (!form.ean || (!editMode && !unitId)) return;
+    pdCheckedRef.current = true;
+    void checkProductData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingDraft, form.ean, unitId, editMode]);
 
   const handlePublish = async () => {
     if (!form.ean) {
@@ -478,9 +645,10 @@ export default function KauflandOfferForm({
     }
   };
 
-  const overlayBusy = aiBusy !== null || loadingOpts || busy;
-  const overlayLabel =
-    aiBusy === "category"
+  const overlayBusy = aiBusy !== null || loadingOpts || busy || loadingDraft;
+  const overlayLabel = loadingDraft
+    ? "Wczytywanie oferty z Kauflandu…"
+    : aiBusy === "category"
       ? "AI dopasowuje kategorię…"
       : aiBusy === "fill"
         ? "AI wypełnia formularz…"
@@ -881,7 +1049,10 @@ export default function KauflandOfferForm({
           {pdStatus && (
             <ul className="text-xs text-gray-700 mt-2 space-y-1">
               {pdStatus.status === "NONE" && (
-                <li>Dla tego EAN-u nie wysłano jeszcze żadnych danych produktowych.</li>
+                <li>
+                  Dla tego EAN-u nie wysłano jeszcze żadnych danych
+                  produktowych.
+                </li>
               )}
               {pdStatus.missing.length > 0 && (
                 <li>
@@ -930,6 +1101,20 @@ export default function KauflandOfferForm({
       {unitId && (
         <div className="flex items-center gap-2 text-xs text-gray-500 pt-1">
           <span className="font-mono text-gray-400">unit {unitId}</span>
+          {unitMeta && (
+            <span
+              className={
+                unitMeta.isLive === false ? "text-amber-700" : "text-gray-500"
+              }
+            >
+              {unitMeta.status || "—"}
+              {unitMeta.isLive === false
+                ? " · niewidoczna na Kaufland.pl"
+                : unitMeta.isLive
+                  ? " · widoczna"
+                  : ""}
+            </span>
+          )}
           <a
             href={`https://sellerportal.kaufland.de/product-data/${encodeURIComponent(form.ean)}/attributes?unitId=${unitId}&storefront=pl`}
             target="_blank"
