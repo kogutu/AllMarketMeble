@@ -51,10 +51,21 @@ async function resolveCategoryName(code: string, fallbackLabel: string): Promise
   // kosztowała publikację 35 s przy zimnym cache (6084 kategorie, 61 żądań) — tyle, że funkcja
   // padała na timeoucie, zanim w ogóle doszło do wysłania danych produktowych.
   const direct = await KauflandClient.getCategory(id).catch(() => null);
-  if (direct?.title_singular || direct?.name) return direct.title_singular || direct.name;
+  const name = categoryTitle(direct);
+  if (name) return name;
   const cats = await KauflandClient.getAllCategories().catch(() => [] as KauflandCategory[]);
-  const hit = cats.find((c) => c.id_category === id);
-  return hit?.title_singular || hit?.name || fallbackLabel;
+  return categoryTitle(cats.find((c) => c.id_category === id)) || fallbackLabel;
+}
+
+/**
+ * Kaufland dopasowuje atrybut `category` po nazwie w LICZBIE MNOGIEJ („Stoły do jadalni"), nie
+ * pojedynczej. Nierozpoznana nazwa nie jest błędem: PUT zwraca 200, dane lądują w naszym magazynie
+ * product data, ale `category_detail` zostaje puste, produkt trafia do kategorii „Pozostałe"
+ * (46001) z `is_valid: false` i żaden atrybut nie zostaje zastosowany — oferta wisi w Seller
+ * Center bez tytułu i zdjęć jako „nieprawidłowa". Stąd `title_plural` jako pierwszy wybór.
+ */
+function categoryTitle(c: KauflandCategory | null | undefined): string {
+  return c?.title_plural || c?.title_singular || c?.name || '';
 }
 
 /** Zwraca komunikat błędu albo `null`, gdy kontakt GPSR został zapisany. */
