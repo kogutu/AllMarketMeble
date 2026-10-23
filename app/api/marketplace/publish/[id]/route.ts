@@ -63,14 +63,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         [accountId, outcome.ref, outcome.productImportId ?? null, outcome.offerImportId ?? null, basePrice, params.id]
       );
     } else if (adapter.kind === 'kaufland') {
+      // Unit i dane produktowe to dwa osobne żądania do Kauflandu: unit może powstać, a dane
+      // produktowe polec. Zapisujemy werdykt adaptera, bo inaczej jedynym śladem jest log funkcji,
+      // a w panelu widać „wystawione" przy ofercie bez tytułu i zdjęć.
+      const raw = (outcome.raw ?? {}) as Record<string, unknown>;
+      const productDataError = raw.productDataError ? String(raw.productDataError) : null;
       await query(
         `UPDATE allegro_offers SET
            marketplace = 'kaufland', account_id = ?, allegro_offer_id = ?,
            base_price = COALESCE(?, base_price), status = 'active',
-           allegro_response = ?, updated_at = NOW()
+           allegro_response = ?, error_message = ?, updated_at = NOW()
          WHERE id = ?`,
-        [accountId, outcome.ref, basePrice, JSON.stringify({ id: outcome.ref }), params.id]
+        [
+          accountId, outcome.ref, basePrice,
+          JSON.stringify({
+            id: outcome.ref,
+            productData: raw.productData ?? null,
+            productDataError,
+            gpsrError: raw.gpsrError ?? null,
+          }),
+          productDataError ? `Dane produktowe nie poszły: ${productDataError}` : null,
+          params.id,
+        ]
       );
+      if (productDataError) {
+        logger.warn('kaufland: unit utworzony, dane produktowe odrzucone', {
+          offerId: params.id, ref: outcome.ref, productDataError,
+        });
+      }
     } else {
       await query(
         `UPDATE allegro_offers SET

@@ -47,8 +47,13 @@ const FURNITURE_ATTRS: MarketplaceAttribute[] = [
 async function resolveCategoryName(code: string, fallbackLabel: string): Promise<string> {
   const id = Number(code);
   if (!id || Number.isNaN(id)) return fallbackLabel;
+  // Jedno żądanie o konkretną kategorię, zanim sięgniemy po całe drzewo. Odwrotna kolejność
+  // kosztowała publikację 35 s przy zimnym cache (6084 kategorie, 61 żądań) — tyle, że funkcja
+  // padała na timeoucie, zanim w ogóle doszło do wysłania danych produktowych.
+  const direct = await KauflandClient.getCategory(id).catch(() => null);
+  if (direct?.title_singular || direct?.name) return direct.title_singular || direct.name;
   const cats = await KauflandClient.getAllCategories().catch(() => [] as KauflandCategory[]);
-  const hit = cats.find((c) => c.id_category === id) ?? await KauflandClient.getCategory(id).catch(() => null);
+  const hit = cats.find((c) => c.id_category === id);
   return hit?.title_singular || hit?.name || fallbackLabel;
 }
 
