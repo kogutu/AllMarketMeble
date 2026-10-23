@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import type { MebleProduct } from '@/types';
 import type { MarketplaceCategory } from '@/lib/marketplaces/types';
+import { prefillKauflandAttributes, isAiFillable, type KauflandAttrSpec } from './prefill';
 
 let client: OpenAI | null = null;
 function getClient(): OpenAI {
@@ -57,64 +58,110 @@ export interface KauflandFillResult {
   handling_time: number;
   description?: string;
   short_description?: string;
-  form?: string;
-  surface_style?: string;
-  suitable_for_location?: string;
-  extendable?: boolean;
-  foldable?: boolean;
-  product_dimensions?: string;
-  package_included?: string;
+  /** Wartości atrybutów katalogu Kauflandu, kluczowane kodem atrybutu z danej kategorii. */
+  attributes: Record<string, string>;
+}
+
+/** Sprowadza odpowiedź AI do formatu, jakiego oczekuje dany typ atrybutu Kauflandu. */
+function normalizeValue(spec: KauflandAttrSpec, raw: unknown): string {
+  const v = String(raw ?? '').trim();
+  if (!v || /^(null|brak|nie dotyczy|n\/a|-)$/i.test(v)) return '';
+  switch (spec.type) {
+    case 'Bool':
+      if (/^(true|tak|yes|1)$/i.test(v)) return 'true';
+      if (/^(false|nie|no|0)$/i.test(v)) return 'false';
+      return '';
+    case 'Int': {
+      const n = parseInt(v.replace(/[^\d-]/g, ''), 10);
+      return Number.isFinite(n) ? String(n) : '';
+    }
+    case 'Si_Meter':
+    case 'Si_Kilogram': {
+      const unit = spec.type === 'Si_Meter' ? 'cm' : 'kg';
+      const m = v.replace(',', '.').match(/\d+(?:\.\d+)?/);
+      return m && Number(m[0]) > 0 ? `${m[0]} ${unit}` : '';
+    }
+    default:
+      return v.slice(0, 1000);
+  }
 }
 
 /**
- * AI wypełnia pola oferty Kaufland: tytuł (note), handling_time, oraz pola product data
- * (opis, krótki opis, kształt, styl, miejsce użytkowania, rozłożenie, wymiary, zakres dostawy).
+ * AI wypełnia ofertę Kaufland: tytuł (note), handling_time, opisy oraz atrybuty katalogu.
+ *
+ * Lista atrybutów pochodzi ze schematu KATEGORII, nie ze sztywnej listy w kodzie — wcześniej
+ * model dostawał osiem pól na zachętę i wszystko poza nimi zostawało puste, choć kategoria ma ich
+ * kilkadziesiąt (dla „Narożnika" 34, w tym wymagany `material_composition`). To, co wynika wprost
+ * z katalogu, podstawia `prefillKauflandAttributes` i ma pierwszeństwo nad odpowiedzią modelu.
  */
 export async function fillKauflandForm(
   product: MebleProduct,
-  categoryLabel: string
+  categoryLabel: string,
+  specs: KauflandAttrSpec[] = []
 ): Promise<KauflandFillResult> {
-  const attrs = (product.attrs || {}) as Record<string, unknown>;
+  const deterministic = prefillKauflandAttributes(product, specs);
+  // Model dostaje tylko to, czego sami nie wyliczyliśmy — i nic, czego nie wolno mu zmyślać.
+  const askFor = specs.filter((s) => isAiFillable(s) && !deterministic[s.code]);
+
   const record = {
-    name: product.name, model: product.model, ean: product.ean,
-    color: product.color?.name,
-    attrs: { kolor: attrs.kolor, material: attrs.materiał ?? attrs.material,
-      szerokosc: attrs.szerokość ?? attrs.szerokosc, wysokosc: attrs.wysokość ?? attrs.wysokosc,
-      glebokosc: attrs.głębokość ?? attrs.glebokosc, dlugosc: attrs.długość ?? attrs.dlugosc,
-      waga: attrs.waga_produktu_kg, przeznaczenie: attrs.przeznaczenie, styl: attrs.styl_wnętrzarski },
+    name: product.name,
+    subtitle: (product as unknown as { subtitle?: string }).subtitle,
+    model: product.model,
+    kind: product.kind,
+    warranty: (product as unknown as { warranty?: string }).warranty,
+    attrs: product.attrs || {},
+    znane_atrybuty: deterministic,
     description: (product.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 2000),
   };
-  const prompt = `Jesteś ekspertem od marketingu mebli. Na podstawie danych produktu wypełnij pola oferty Kaufland.
-Produkt: ${record.name}
+  const attrList = askFor
+    .map((a) => `- "${a.code}" (${a.label}; typ ${a.type}${a.required ? '; WYMAGANY' : ''})`)
+    .join('\n');
+
+  const prompt = `Jesteś ekspertem od marketingu mebli. Na podstawie danych produktu wypełnij ofertę Kaufland.
+Produkt: ${product.name}
 Kategoria: ${categoryLabel}
 Dane (JSON): ${JSON.stringify(record, null, 2)}
 
-Zwróć TYLKO JSON (wszystkie pola po polsku):
+Zasady dla atrybutów:
+- Wypełnij TYLKO te, które wynikają z danych produktu. Czego nie wiesz — wstaw null.
+- Nigdy nie zmyślaj liczb, wymiarów ani materiałów. Liczby bierz wyłącznie z danych.
+- Bool → true/false. Int → sama liczba. Typ Si_Meter → liczba w cm, Si_Kilogram → liczba w kg.
+- Wartości po polsku, bez nazw sklepu, cen, wysyłki i linków.
+
+Atrybuty do wypełnienia:
+${attrList || '(brak — wszystkie znane z katalogu)'}
+
+Zwróć TYLKO JSON:
 {
   "title": "atrakcyjny tytuł do 120 znaków: nazwa + kluczowe cechy, bez ceny i wysyłki",
   "handling_time": <1-5 dni>,
   "description": "pełny opis do 3000 znaków, czysty tekst bez HTML (Kaufland zabrania linków, zdjęć, cen, informacji o wysyłce i gwarancji): cechy, materiały, zastosowanie, wymiary",
   "short_description": "krótki opis bez HTML do 200 znaków: najważniejsze cechy produktu",
-  "form": "kształt mebla np. prostokątny/owalny/okrągły/kwadratowy (lub null)",
-  "surface_style": "styl wnętrza np. nowoczesny/skandynawski/industrialny/glamour (lub null)",
-  "suitable_for_location": "miejsce użytkowania np. salon/sypialnia/biuro (lub null)",
-  "extendable": <true/false — czy blat rozkładany>,
-  "foldable": <true/false — czy składany>,
-  "product_dimensions": "wymiary w formacie 'S x G x W cm' (lub null)",
-  "package_included": "co w zestawie np. 1x stolik, 4x śruby (lub null)"
+  "attributes": { "kod_atrybutu": "wartość albo null", ... }
 }`;
-  const parsed = parseJson<KauflandFillResult>(await ask(prompt, 800));
+
+  const parsed = parseJson<{
+    title?: string;
+    handling_time?: number;
+    description?: string;
+    short_description?: string;
+    attributes?: Record<string, unknown>;
+  }>(await ask(prompt, 2000));
+
+  const aiAttrs: Record<string, string> = {};
+  const byCode = new Map(askFor.map((s) => [s.code, s]));
+  for (const [code, raw] of Object.entries(parsed?.attributes || {})) {
+    const spec = byCode.get(code);
+    if (!spec) continue; // kod spoza schematu kategorii albo zablokowany — ignorujemy
+    const value = normalizeValue(spec, raw);
+    if (value) aiAttrs[code] = value;
+  }
+
   return {
     title: parsed?.title || product.name,
     handling_time: Number(parsed?.handling_time) > 0 ? Math.min(5, Number(parsed!.handling_time)) : 1,
     description: parsed?.description || undefined,
     short_description: parsed?.short_description || undefined,
-    form: parsed?.form || undefined,
-    surface_style: parsed?.surface_style || undefined,
-    suitable_for_location: parsed?.suitable_for_location || undefined,
-    extendable: typeof parsed?.extendable === 'boolean' ? parsed.extendable : undefined,
-    foldable: typeof parsed?.foldable === 'boolean' ? parsed.foldable : undefined,
-    product_dimensions: parsed?.product_dimensions || undefined,
-    package_included: parsed?.package_included || undefined,
+    attributes: { ...aiAttrs, ...deterministic },
   };
 }

@@ -330,15 +330,19 @@ async function processKaufland(item: BulkItem): Promise<{ draftId: number; title
   type KCat = { categoryCode?: string; categoryId?: string; categoryLabel?: string };
   type KFill = {
     title?: string; description?: string; short_description?: string; handling_time?: number;
-    form?: string; surface_style?: string; suitable_for_location?: string;
-    product_dimensions?: string; package_included?: string;
-    extendable?: boolean; foldable?: boolean;
+    attributes?: Record<string, string>;
   };
   const cat: KCat = await api<KCat>(`/api/kaufland/suggest-category`, {
     method: 'POST', body: JSON.stringify({ productId, collection: item.collection }),
   }).catch(() => ({}));
+  // Bez `categoryCode` fill nie wie, o jakie atrybuty katalogu pytać — oferta szłaby z samym opisem.
   const fill: KFill = await api<KFill>(`/api/kaufland/fill`, {
-    method: 'POST', body: JSON.stringify({ productId, collection: item.collection }),
+    method: 'POST',
+    body: JSON.stringify({
+      productId, collection: item.collection,
+      categoryCode: cat.categoryCode || cat.categoryId || '',
+      categoryLabel: cat.categoryLabel || '',
+    }),
   }).catch(() => ({}));
 
   // `/api/kaufland/fill` zwraca pola wprost (title, description, …), nie `formData`, a publikacja
@@ -349,15 +353,7 @@ async function processKaufland(item: BulkItem): Promise<{ draftId: number; title
   ).catch(() => null);
   const p = (prod as { product?: Record<string, unknown> })?.product || (prod as Record<string, unknown>) || {};
   const gallery: string[] = (p.gallery_images as string[] | undefined) ?? (p.img ? [p.img as string] : []);
-  const fillAttrs: Record<string, string> = {};
-  for (const k of ['form', 'surface_style', 'suitable_for_location', 'product_dimensions', 'package_included'] as const) {
-    const v = (fill as Record<string, unknown>)[k];
-    if (v) fillAttrs[k] = String(v);
-  }
-  for (const k of ['extendable', 'foldable'] as const) {
-    const v = (fill as Record<string, unknown>)[k];
-    if (typeof v === 'boolean') fillAttrs[k] = v ? 'true' : 'false';
-  }
+  const fillAttrs: Record<string, string> = { ...(fill.attributes || {}) };
 
   const title = String(fill.title || p.name || '');
   const form = {

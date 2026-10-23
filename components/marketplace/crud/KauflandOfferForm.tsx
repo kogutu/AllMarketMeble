@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import type { MebleProduct } from "@/types";
+import { prefillKauflandAttributes } from "@/lib/marketplaces/kaufland/prefill";
 import CrudOverlay from "./CrudOverlay";
 
 const SLUG = "kaufland";
@@ -164,82 +165,6 @@ export default function KauflandOfferForm({
       ? " is-filled"
       : "";
 
-  // Pre-fill product attributes from Typesense product data.
-  const prefillAttrs = (attrs: KAttr[]): Record<string, string> => {
-    const pAttrs = (product.attrs || {}) as Record<string, unknown>;
-    const dims = product as unknown as Record<string, unknown>;
-    const dimItems = (
-      dims.dimensions as
-        { items?: { s?: string; w?: string; d?: string }[] } | undefined
-    )?.items?.[0];
-    const str = (k: string) => String(pAttrs[k] ?? "");
-    const dim = (keys: string[]): string => {
-      for (const k of keys) {
-        const v = str(k);
-        if (v && v !== "0") return `${v} cm`;
-      }
-      return "";
-    };
-    const out: Record<string, string> = {};
-    for (const a of attrs) {
-      switch (a.code) {
-        case "manufacturer":
-          out[a.code] =
-            process.env.NEXT_PUBLIC_DEFAULT_PRODUCENT_MARKA || "Mebel Partner";
-          break;
-        case "mpn":
-          out[a.code] = product.sku || String(product.id);
-          break;
-        case "colour":
-          out[a.code] =
-            str("kolor_blatu") || str("kolor") || product.color?.name || "";
-          break;
-        case "material":
-          out[a.code] =
-            str("materiał_blatu") ||
-            str("material_blatu") ||
-            str("tkanina") ||
-            str("materiał") ||
-            "";
-          break;
-        case "wood_type":
-          out[a.code] =
-            str("materiał_podstawy") || str("material_podstawy") || "";
-          break;
-        case "width":
-          out[a.code] =
-            dim(["szerokość", "szerokosc"]) ||
-            (dimItems?.s ? `${dimItems.s} cm` : "");
-          break;
-        case "height":
-          out[a.code] = dim(["wysokość", "wysokosc"]);
-          break;
-        case "depth":
-          out[a.code] =
-            dim(["długość_siedziska", "glebokosc"]) ||
-            (dimItems?.d ? `${dimItems.d} cm` : "");
-          break;
-        case "length":
-          out[a.code] =
-            dim(["długość", "dlugosc"]) ||
-            (dimItems?.s ? `${dimItems.s} cm` : "");
-          break;
-        case "weight": {
-          const w =
-            str("waga_produktu_kg") ||
-            String(
-              (dims.dimensions as { weight?: string } | undefined)?.weight ??
-                "",
-            );
-          out[a.code] = w ? `${w} kg` : "";
-          break;
-        }
-      }
-      if (!out[a.code]) delete out[a.code];
-    }
-    return out;
-  };
-
   // Load shipping groups, warehouses and product attributes.
   const loadOptions = async (categoryCode: string) => {
     setLoadingOpts(true);
@@ -254,7 +179,7 @@ export default function KauflandOfferForm({
       setShippingGroups(sg);
       setWarehouses(wh);
       setKAttributes(attrs);
-      const prefilled = prefillAttrs(attrs);
+      const prefilled = prefillKauflandAttributes(product, attrs);
       setForm((f) => ({
         ...f,
         id_shipping_group:
@@ -439,6 +364,7 @@ export default function KauflandOfferForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productId: String(product.id),
+          categoryCode: form.categoryCode,
           categoryLabel: form.categoryLabel,
         }),
       });
@@ -447,21 +373,9 @@ export default function KauflandOfferForm({
         toast.error("Błąd AI: " + (d.details || d.error));
         return;
       }
-      // Pozostałe pola AI to atrybuty katalogu Kaufland (form, surface_style, …) — wpisujemy je
-      // do mapy atrybutów, bo stamtąd lecą do product data i stamtąd renderuje je formularz.
-      const aiAttrs: Record<string, string> = {};
-      for (const k of [
-        "form",
-        "surface_style",
-        "suitable_for_location",
-        "product_dimensions",
-        "package_included",
-      ] as const) {
-        if (d[k]) aiAttrs[k] = String(d[k]);
-      }
-      for (const k of ["extendable", "foldable"] as const) {
-        if (typeof d[k] === "boolean") aiAttrs[k] = d[k] ? "true" : "false";
-      }
+      // Atrybuty przychodzą kluczowane kodami atrybutów TEJ kategorii — wpisujemy je do mapy
+      // atrybutów, bo stamtąd lecą do product data i stamtąd renderuje je formularz.
+      const aiAttrs = (d.attributes || {}) as Record<string, string>;
       setForm((f) => ({
         ...f,
         title: d.title || f.title,
