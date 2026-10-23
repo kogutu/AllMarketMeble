@@ -61,6 +61,8 @@ export default function KauflandGrid() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [gpsrBusy, setGpsrBusy] = useState(false);
+  const [gpsrProg, setGpsrProg] = useState(0);
   const [syncProg, setSyncProg] = useState<{ processed: number; total: number } | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [fields, setFields] = useState<FieldDef[]>([]);
@@ -144,6 +146,33 @@ export default function KauflandGrid() {
     } finally { setSyncing(false); setSyncProg(null); }
   };
 
+  /**
+   * Uzupełnia kontakty GPSR dla całego asortymentu na Kauflandzie — zamiast wpisywania tych
+   * samych danych przy każdej ofercie w Seller Center. Partiami, bo to jedno żądanie na EAN.
+   */
+  const pushGpsr = async () => {
+    if (gpsrBusy) return;
+    setGpsrBusy(true);
+    try {
+      let offset = 0; let ok = 0; let failed = 0; let done = false;
+      do {
+        const d: { success?: boolean; ok?: number; failed?: number; nextOffset?: number; done?: boolean; error?: string; details?: string } =
+          await fetch(`/api/kaufland/gpsr?limit=200&offset=${offset}`, { method: 'POST' }).then((r) => r.json());
+        if (!d.success) { toast.error('GPSR: ' + (d.details || d.error || 'nieznany błąd')); return; }
+        ok += d.ok || 0; failed += d.failed || 0;
+        offset = d.nextOffset ?? offset + 200;
+        done = !!d.done;
+        setGpsrProg(ok + failed);
+      } while (!done);
+      toast.success(`GPSR uzupełniony: ${ok} produktów${failed ? `, błędów: ${failed}` : ''}`);
+    } catch {
+      toast.error('GPSR: błąd sieci');
+    } finally {
+      setGpsrBusy(false);
+      setGpsrProg(0);
+    }
+  };
+
   const onCellValueChanged = async (e: CellValueChangedEvent<Row>) => {
     const colId = e.column.getColId();
     if (colId !== 'market_price' && colId !== 'market_quantity') return;
@@ -198,6 +227,17 @@ export default function KauflandGrid() {
         case 'base_qty': return { headerName: h('Ilość bazy'), field, width: 100, filter: 'agNumberColumnFilter', type: 'rightAligned' };
         case 'market_quantity': return { headerName: h(`Ilość ${mpLabel}`), field, width: 110, editable: true, filter: 'agNumberColumnFilter', type: 'rightAligned', valueParser: numParser, cellClassRules: diffQty };
         case 'status': return { headerName: h('Status'), field, width: 110 };
+        // Dlaczego oferta nie dociera do klientów — uzupełniane przy synchronizacji dla ofert,
+        // które nie są live (patrz enrichWithProductData w adapterze Kauflandu).
+        case 'pd_problem': return {
+          headerName: h('Dane produktowe'), field, width: 260, filter: 'agTextColumnFilter',
+          cellClassRules: {
+            'text-green-700': (p: { value?: unknown }) => p.value === 'OK',
+            'text-amber-700': (p: { value?: unknown }) => typeof p.value === 'string' && p.value !== 'OK' && p.value.length > 0,
+          },
+          cellRenderer: (p: ICellRendererParams<Row>) =>
+            p.value ? <span className="whitespace-normal leading-tight">{String(p.value)}</span> : <span className="text-gray-300">—</span>,
+        };
         case 'base_typesense_id': return {
           headerName: h('Akcje'), field, width: 90, pinned: 'right', sortable: false, filter: false,
           cellRenderer: (p: ICellRendererParams<Row>) => (p.value
@@ -225,7 +265,7 @@ export default function KauflandGrid() {
       const rest = fields.filter((f) => !inView.has(f.field)).map((f) => ({ ...buildCol(f.field, f.label), hide: true }));
       return [...cols, ...rest];
     }
-    const coreOrder = ['base_name', 'ean', 'base_price', 'market_price', 'base_qty', 'market_quantity', 'status', 'base_typesense_id'];
+    const coreOrder = ['base_name', 'ean', 'base_price', 'market_price', 'base_qty', 'market_quantity', 'status', 'pd_problem', 'base_typesense_id'];
     const coreCols = coreOrder.map((f) => buildCol(f));
     const hiddenSkip = new Set([...coreOrder, 'ref', '__meta']);
     const dynCols = fields.filter((f) => !hiddenSkip.has(f.field)).map((f) => ({ ...buildCol(f.field, f.label), hide: true }));
@@ -243,10 +283,14 @@ export default function KauflandGrid() {
           : progress ? `Sync w tle ${progress.done}/${progress.total || '?'} (${pct}%)` : 'Aktualizuj z marketplace'}
       </button>
       <button className="btn-secondary btn-sm" onClick={loadFromDb} disabled={loading}>Odśwież</button>
+      <button className="btn-secondary btn-sm" onClick={pushGpsr} disabled={gpsrBusy} title="Uzupełnia kontakt GPSR (producent) dla wszystkich ofert na Kauflandzie">
+        {gpsrBusy ? `GPSR ${gpsrProg}…` : 'Uzupełnij GPSR'}
+      </button>
       <select className="input w-44 text-sm" value={String(selectedViewId)} onChange={(e) => selectView(e.target.value === '' ? '' : Number(e.target.value))}>
         <option value="">Widok: domyślny</option>
         {views.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
       </select>
+      <a href="/kaufland/problemy" className="text-xs text-amber-700 underline font-medium">Problemy z ofertami →</a>
       <a href={`/widoki?slug=${SLUG}`} className="text-xs text-indigo-600 underline">Zarządzaj widokami</a>
       <span className="text-xs text-gray-400">{lastSync ? `baza: ${new Date(lastSync).toLocaleString('pl')}` : 'brak danych — kliknij Aktualizuj'}</span>
     </>

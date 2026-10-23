@@ -17,6 +17,15 @@ const CORE = [
   { field: 'ref', label: 'Ref' },
 ];
 
+/** Czytelne nazwy dla kolumn doklejanych przez adaptery (Kaufland: status danych produktowych). */
+const DYNAMIC_LABELS: Record<string, string> = {
+  pd_problem: 'Dane produktowe',
+  pd_ready: 'Dane produktowe OK',
+  pd_status: 'Status danych produktowych',
+  pd_missing: 'Brakujące atrybuty',
+  pd_pictures: 'Zdjęcia przyjęte',
+};
+
 /**
  * GET /api/marketplace/fields?slug=…
  * Returns every available column for the view editor: core + ALL keys present in the persisted
@@ -35,7 +44,8 @@ export async function GET(req: NextRequest) {
       if (obj && typeof obj === 'object') for (const k of Object.keys(obj)) keys.add(k);
     }
     const coreFields = new Set(CORE.map((c) => c.field));
-    const dynamic = Array.from(keys).filter((k) => !coreFields.has(k)).sort().map((k) => ({ field: k, label: k }));
+    const dynamic = Array.from(keys).filter((k) => !coreFields.has(k)).sort()
+      .map((k) => ({ field: k, label: DYNAMIC_LABELS[k] ?? k }));
     return NextResponse.json({ fields: [...CORE, ...dynamic] });
   } catch (error) {
     return NextResponse.json({ fields: CORE, error: String(error) }, { status: 500 });

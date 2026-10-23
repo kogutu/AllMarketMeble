@@ -93,7 +93,7 @@ Zwróć TYLKO JSON (wszystkie pola po polsku):
 {
   "title": "atrakcyjny tytuł do 120 znaków: nazwa + kluczowe cechy, bez ceny i wysyłki",
   "handling_time": <1-5 dni>,
-  "description": "pełny opis HTML do 3000 znaków: cechy, materiały, zastosowanie, wymiary",
+  "description": "pełny opis do 3000 znaków, czysty tekst bez HTML (Kaufland zabrania linków, zdjęć, cen, informacji o wysyłce i gwarancji): cechy, materiały, zastosowanie, wymiary",
   "short_description": "krótki opis bez HTML do 200 znaków: najważniejsze cechy produktu",
   "form": "kształt mebla np. prostokątny/owalny/okrągły/kwadratowy (lub null)",
   "surface_style": "styl wnętrza np. nowoczesny/skandynawski/industrialny/glamour (lub null)",

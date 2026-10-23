@@ -17,6 +17,17 @@ const CLIENT_KEY = clean(process.env.KAUFLAND_API_CLIENT_KEY);
 const SECRET = clean(process.env.KAUFLAND_API_SECRET_KEY);
 const STOREFRONT = clean(process.env.KAUFLAND_STOREFRONT) || 'pl';
 
+/**
+ * Oferty (units) są per STOREFRONT, ale dane produktowe są per LOCALE — i Kaufland weryfikuje
+ * język tekstu. Polski tytuł/opis wysłany do `de-DE` wraca jako DECLINED
+ * (`wrong_language_and_missing_offer`), przez co produkt zostaje „niekompletny”, a wysłane z nim
+ * zdjęcia wiszą w `media_not_ready_yet`. Dlatego locale wynika ze storefrontu.
+ */
+const LOCALE_BY_STOREFRONT: Record<string, string> = {
+  pl: 'pl-PL', de: 'de-DE', at: 'de-AT', cz: 'cs-CZ', sk: 'sk-SK', fr: 'fr-FR', it: 'it-IT',
+};
+const LOCALE = clean(process.env.KAUFLAND_LOCALE) || LOCALE_BY_STOREFRONT[STOREFRONT] || 'pl-PL';
+
 function sign(method: string, url: string, body: string, ts: number): string {
   const plain = `${method}\n${url}\n${body}\n${ts}`;
   return crypto.createHmac('sha256', SECRET).update(plain, 'utf8').digest('hex');
@@ -197,12 +208,11 @@ export const KauflandClient = {
   },
 
   /**
-   * Wyślij dane produktu do katalogu Kaufland (tytuł, opis, zdjęcia, producent).
-   * WYMAGA locale=de-DE — Kaufland traktuje wersję de-DE jako bazową; bez niej status
-   * "missing: Hersteller/Titel/Beschreibung/Bild" i produkt nie wychodzi live.
-   * Wysyłamy dwa razy: de-DE (wymagane) + pl-PL (dla polskiego storefront).
+   * Wyślij dane produktu do katalogu Kaufland (tytuł, opis, zdjęcia, producent) w locale
+   * zgodnym ze storefrontem (PL → pl-PL). PUT zastępuje CAŁOŚĆ danych wgranych przez nas dla
+   * tego EAN-u w tym locale, więc wysyłamy komplet atrybutów naraz.
    */
-  async submitProductData(input: KauflandProductData): Promise<void> {
+  async submitProductData(input: KauflandProductData, locale: string = LOCALE): Promise<void> {
     const a: Record<string, unknown> = {
       title: [input.title],
       manufacturer: [input.manufacturer],
@@ -229,19 +239,78 @@ export const KauflandClient = {
     if (input.product_dimensions) a.product_dimensions = [input.product_dimensions];
     if (input.package_included)  a.package_included = [input.package_included];
     const body = { ean: [input.ean], attributes: a };
-    // de-DE wymagane przez Kaufland jako baza katalogu
-    await request('PUT', '/product-data/', { locale: 'de-DE' }, body);
-    // pl-PL dla polskiego storefront (opis w języku klienta)
-    await request('PUT', '/product-data/', { locale: 'pl-PL' }, body).catch(() => {/* non-fatal */});
+    await request('PUT', '/product-data/', { locale }, body);
   },
 
-  /** Sprawdź status przetwarzania product data dla EAN. */
-  async getProductDataStatus(ean: string): Promise<{ status: string; missing: string[] } | null> {
+  /**
+   * Status przetwarzania danych produktowych dla EAN. Poza `update_status` (PENDING →
+   * IN_PROGRESS → SUCCESS/FAIL) zwraca powód niegotowości i listę atrybutów, których Kaufland
+   * NIE przyjął (`DECLINED`/`REFUSED`) — to jedyne miejsce, gdzie widać np. odrzucone zdjęcia.
+   */
+  async getProductDataStatus(ean: string, locale: string = LOCALE): Promise<KauflandProductDataStatus | null> {
     try {
-      const data = await request<{ data?: { update_status?: string; missing_attributes?: string[] } }>(
-        'GET', `/product-data/status/${encodeURIComponent(ean)}`, { locale: 'de-DE' });
-      return { status: data.data?.update_status ?? 'UNKNOWN', missing: data.data?.missing_attributes ?? [] };
+      const data = await request<{ data?: KauflandRawStatus }>(
+        'GET', `/product-data/status/${encodeURIComponent(ean)}`, { locale });
+      const d = data.data;
+      if (!d) return null;
+      const values = d.attribute_values ?? [];
+      const bad = values.filter((v) => v.state === 'DECLINED' || v.state === 'REFUSED');
+      return {
+        ready: Boolean(d.product_ready),
+        status: d.update_status ?? 'UNKNOWN',
+        failReason: d.update_fail_reason ?? null,
+        notReadyReason: d.product_not_ready_reason ?? null,
+        missing: d.missing_attributes ?? [],
+        minOneMissing: d.min_one_missing_attributes ?? [],
+        blocked: d.blocked_reasons ?? [],
+        idProduct: d.id_product ?? null,
+        declined: bad.map((v) => ({
+          attribute: v.attribute, state: v.state, message: v.message || '',
+          value: String(v.original_value ?? '').slice(0, 300),
+        })),
+        pictures: {
+          total: values.filter((v) => v.attribute === 'picture').length,
+          rejected: bad.filter((v) => v.attribute === 'picture').length,
+        },
+      };
     } catch { return null; }
+  },
+
+  /**
+   * Atrybuty WYMAGANE/opcjonalne konkretnej kategorii. Globalne `GET /attributes` nie filtruje
+   * po kategorii i nie ma flagi „required”, ale `/categories/{id}?embedded=…` daje jedno i drugie
+   * (`required_attributes`, `optional_attributes`, `conditional_attributes`).
+   */
+  async getCategoryAttributeSchema(idCategory: number): Promise<KauflandCategoryAttributes> {
+    const groups = ['required_attributes', 'optional_attributes', 'conditional_attributes'];
+    const [required, optional, conditional] = await Promise.all(
+      groups.map((g) =>
+        request<{ data?: Record<string, KauflandAttribute[] | undefined> }>(
+          'GET', `/categories/${idCategory}`, { storefront: STOREFRONT, embedded: g }
+        ).then((r) => r.data?.[g] ?? []).catch(() => [] as KauflandAttribute[])
+      )
+    );
+    return { required, optional, conditional };
+  },
+
+  // ── Kontakty GPSR (producent / osoba odpowiedzialna w UE) ──────────────────
+  /** Kontakty GPSR zapisane dla produktu. Pusta tablica = Kaufland każe je wpisać ręcznie. */
+  async getProductContacts(ean: string): Promise<KauflandContactEntry[]> {
+    try {
+      const data = await request<{ data?: { contacts?: KauflandContactEntry[] } }>(
+        'GET', `/contacts/products/${encodeURIComponent(ean)}`);
+      return data.data?.contacts ?? [];
+    } catch { return []; }
+  },
+
+  /** Ustaw kontakt GPSR pojedynczego produktu (nadpisuje kontakt z poziomu producenta). */
+  async putProductContact(ean: string, type: KauflandContactType, contact: KauflandContact): Promise<void> {
+    await request('PUT', `/contacts/products/${encodeURIComponent(ean)}/${type}`, undefined, contact);
+  },
+
+  /** Ustaw kontakt GPSR dla całego producenta — obejmuje wszystkie jego produkty naraz. */
+  async putManufacturerContact(manufacturer: string, type: KauflandContactType, contact: KauflandContact): Promise<void> {
+    await request('PUT', `/contacts/manufacturers/${encodeURIComponent(manufacturer)}/${type}`, undefined, contact);
   },
 
   async getShippingGroups(): Promise<KauflandShippingGroup[]> {
@@ -288,6 +357,44 @@ export interface KauflandAttribute {
   id: number; name: string; title?: string; explanation?: string;
   is_multiple?: boolean; is_sharedset?: boolean; type?: string; seller_instructions?: string;
 }
+interface KauflandRawStatus {
+  product_ready?: boolean; update_status?: string; update_fail_reason?: string | null;
+  product_not_ready_reason?: string | null; id_product?: number;
+  missing_attributes?: string[]; min_one_missing_attributes?: string[]; blocked_reasons?: string[];
+  attribute_values?: { attribute: string; original_value?: unknown; state: string; message?: string }[];
+}
+
+export interface KauflandProductDataStatus {
+  ready: boolean;
+  status: string;                 // PENDING | IN_PROGRESS | SUCCESS | FAIL
+  failReason: string | null;
+  notReadyReason: string | null;  // np. MISSING_ATTRIBUTES | BLACKLISTED
+  missing: string[];
+  minOneMissing: string[];
+  blocked: string[];
+  idProduct: number | null;
+  declined: { attribute: string; state: string; message: string; value: string }[];
+  pictures: { total: number; rejected: number };
+}
+
+export interface KauflandCategoryAttributes {
+  required: KauflandAttribute[]; optional: KauflandAttribute[]; conditional: KauflandAttribute[];
+}
+
+export type KauflandContactType = 'manufacturer' | 'eu-responsible-person';
+export interface KauflandContact {
+  name: string;
+  postal_address: {
+    street: string; house_number: string; city: string;
+    postal_code?: string; country_code: string; address_additional?: string | null;
+  };
+  contact_info: { email_address?: string; website_url?: string; phone_number?: string | null };
+}
+export interface KauflandContactEntry {
+  contact_type: KauflandContactType; contact: KauflandContact;
+  created_at?: string; updated_at?: string | null;
+}
+
 export interface KauflandShippingGroup { id_shipping_group: number; name: string; is_default?: boolean; }
 export interface KauflandWarehouse { id_warehouse: number; name: string; is_default?: boolean; }
 export interface KauflandProductData {

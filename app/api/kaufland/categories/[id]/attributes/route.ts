@@ -4,8 +4,8 @@ import { KauflandAdapter } from '@/lib/marketplaces/kaufland/adapter';
 
 /**
  * GET /api/kaufland/categories/{id}/attributes
- * Kaufland exposes no per-category required-attribute schema (the catalog is EAN-matched), so this
- * returns the offer-level options the form needs: shipping groups, warehouses and the category VAT.
+ * Zwraca atrybuty WYMAGANE/opcjonalne tej kategorii (z `embedded=required_attributes`) oraz
+ * opcje poziomu oferty: grupy wysyłki, magazyny i VAT kategorii.
  */
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       KauflandClient.getShippingGroups(),
       KauflandClient.getWarehouses(),
       KauflandClient.getCategory(Number(params.id)).catch(() => null),
-      adapter.getCategoryAttributes(),
+      adapter.getCategoryAttributes(params.id),
     ]);
     return NextResponse.json({
       attributes,

@@ -32,6 +32,19 @@ interface KAttr {
   multiple?: boolean;
 }
 
+/** Werdykt Kauflandu co do danych produktowych — odpowiedź `/api/kaufland/product-data-status`. */
+interface PdStatus {
+  ready: boolean;
+  status: string;
+  notReadyReason: string | null;
+  failReason: string | null;
+  missing: string[];
+  blocked: string[];
+  declined: { attribute: string; state: string; message: string }[];
+  pictures: { total: number; rejected: number };
+  gpsr: boolean;
+}
+
 interface KForm {
   title: string;
   sku: string;
@@ -101,6 +114,8 @@ export default function KauflandOfferForm({
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState<null | "category" | "fill">(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [pdStatus, setPdStatus] = useState<PdStatus | null>(null);
+  const [pdBusy, setPdBusy] = useState(false);
   const autoSuggestedRef = useRef(false);
   const autoFillForRef = useRef("");
 
@@ -282,6 +297,21 @@ export default function KauflandOfferForm({
         toast.error("Błąd AI: " + (d.details || d.error));
         return;
       }
+      // Pozostałe pola AI to atrybuty katalogu Kaufland (form, surface_style, …) — wpisujemy je
+      // do mapy atrybutów, bo stamtąd lecą do product data i stamtąd renderuje je formularz.
+      const aiAttrs: Record<string, string> = {};
+      for (const k of [
+        "form",
+        "surface_style",
+        "suitable_for_location",
+        "product_dimensions",
+        "package_included",
+      ] as const) {
+        if (d[k]) aiAttrs[k] = String(d[k]);
+      }
+      for (const k of ["extendable", "foldable"] as const) {
+        if (typeof d[k] === "boolean") aiAttrs[k] = d[k] ? "true" : "false";
+      }
       setForm((f) => ({
         ...f,
         title: d.title || f.title,
@@ -290,6 +320,7 @@ export default function KauflandOfferForm({
         ...(d.short_description
           ? { short_description: d.short_description }
           : {}),
+        attributes: { ...f.attributes, ...aiAttrs },
       }));
       toast.success("AI wypełniło formularz");
     } catch {
@@ -356,6 +387,26 @@ export default function KauflandOfferForm({
     }
   };
 
+  /**
+   * Odpytuje Kaufland, co faktycznie przyjął z wysłanych danych produktowych. Bez tego jedyną
+   * informacją zwrotną jest ręczne przeglądanie Seller Center — a odrzucone zdjęcia czy brakujące
+   * atrybuty widać tylko tam.
+   */
+  const checkProductData = async () => {
+    if (!form.ean) return;
+    setPdBusy(true);
+    try {
+      const d = await fetch(
+        `/api/kaufland/product-data-status?ean=${encodeURIComponent(form.ean)}`,
+      ).then((r) => r.json());
+      setPdStatus(d?.ean ? d : null);
+    } catch {
+      setPdStatus(null);
+    } finally {
+      setPdBusy(false);
+    }
+  };
+
   const handlePublish = async () => {
     if (!form.ean) {
       toast.error("Kaufland wymaga EAN (dopasowanie po EAN w katalogu)");
@@ -388,6 +439,8 @@ export default function KauflandOfferForm({
         setUnitId(ref);
         toast.success(`Wystawiono na ${MP_NAME} (unit ${ref})`);
         setStatus(`success:${ref}`);
+        // Kaufland weryfikuje dane produktowe asynchronicznie — pokaż od razu, co przyjął.
+        void checkProductData();
       } else {
         toast.error("Błąd publikacji");
         setStatus(`error: ${d.details || d.error || "nieznany"}`);
@@ -795,6 +848,78 @@ export default function KauflandOfferForm({
             </div>
           );
         })()}
+
+      {(pdStatus || form.ean) && (
+        <div
+          className={`rounded-lg border px-4 py-3 ${
+            !pdStatus
+              ? "bg-gray-50 border-gray-200"
+              : pdStatus.ready && pdStatus.pictures.rejected === 0
+                ? "bg-green-50 border-green-200"
+                : "bg-amber-50 border-amber-200"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-gray-800">
+              Dane produktowe Kaufland
+              {pdStatus && (
+                <span className="ml-2 font-normal text-gray-500">
+                  {pdStatus.ready ? "kompletne" : "niekompletne"} ·{" "}
+                  {pdStatus.status}
+                </span>
+              )}
+            </p>
+            <button
+              className="btn-secondary btn-sm text-xs shrink-0"
+              onClick={checkProductData}
+              disabled={pdBusy || !form.ean}
+            >
+              {pdBusy ? "Sprawdzam…" : "Sprawdź w Kauflandzie"}
+            </button>
+          </div>
+
+          {pdStatus && (
+            <ul className="text-xs text-gray-700 mt-2 space-y-1">
+              {pdStatus.status === "NONE" && (
+                <li>Dla tego EAN-u nie wysłano jeszcze żadnych danych produktowych.</li>
+              )}
+              {pdStatus.missing.length > 0 && (
+                <li>
+                  <b>Brakuje:</b> {pdStatus.missing.join(", ")}
+                </li>
+              )}
+              {pdStatus.blocked.length > 0 && (
+                <li className="text-red-700">
+                  <b>Zablokowany:</b> {pdStatus.blocked.join(", ")}
+                </li>
+              )}
+              {pdStatus.failReason && (
+                <li className="text-red-700">
+                  <b>Odrzucone:</b> {pdStatus.failReason}
+                </li>
+              )}
+              <li>
+                <b>Zdjęcia:</b>{" "}
+                {pdStatus.pictures.total === 0
+                  ? "brak — Kaufland nie przyjął żadnego"
+                  : `${pdStatus.pictures.total - pdStatus.pictures.rejected} z ${pdStatus.pictures.total} przyjętych`}
+              </li>
+              <li>
+                <b>GPSR:</b>{" "}
+                {pdStatus.gpsr
+                  ? "kontakt ustawiony"
+                  : "brak kontaktu — trzeba będzie wpisać ręcznie"}
+              </li>
+              {pdStatus.declined.slice(0, 4).map((d, i) => (
+                <li key={i} className="text-amber-800">
+                  {d.attribute}: {d.state}
+                  {d.message ? ` — ${d.message}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {status && !status.startsWith("success:") && (
         <div className="text-sm rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-gray-700">

@@ -328,7 +328,12 @@ async function processMirakl(item: BulkItem, operator: 'empik' | 'brw'): Promise
 async function processKaufland(item: BulkItem): Promise<{ draftId: number; title: string }> {
   const productId = item.typesense_id;
   type KCat = { categoryCode?: string; categoryId?: string; categoryLabel?: string };
-  type KFill = { formData?: Record<string, unknown>; title?: string; description?: string };
+  type KFill = {
+    title?: string; description?: string; short_description?: string; handling_time?: number;
+    form?: string; surface_style?: string; suitable_for_location?: string;
+    product_dimensions?: string; package_included?: string;
+    extendable?: boolean; foldable?: boolean;
+  };
   const cat: KCat = await api<KCat>(`/api/kaufland/suggest-category`, {
     method: 'POST', body: JSON.stringify({ productId, collection: item.collection }),
   }).catch(() => ({}));
@@ -336,14 +341,47 @@ async function processKaufland(item: BulkItem): Promise<{ draftId: number; title
     method: 'POST', body: JSON.stringify({ productId, collection: item.collection }),
   }).catch(() => ({}));
 
-  const form = { ...(fill.formData || {}), category: cat.categoryCode || cat.categoryId };
-  const title = String(fill.title || (form as { title?: string }).title || '');
+  // `/api/kaufland/fill` zwraca pola wprost (title, description, …), nie `formData`, a publikacja
+  // czyta `categoryCode`/`categoryLabel`. Bez zbudowania pełnego form_data szkic trafiał do bazy
+  // bez EAN-u, ceny i zdjęć — czyli nie dało się go wystawić.
+  const prod = await api<Record<string, unknown>>(
+    `/api/products/${encodeURIComponent(productId)}?collection=${encodeURIComponent(item.collection)}`
+  ).catch(() => null);
+  const p = (prod as { product?: Record<string, unknown> })?.product || (prod as Record<string, unknown>) || {};
+  const gallery: string[] = (p.gallery_images as string[] | undefined) ?? (p.img ? [p.img as string] : []);
+  const fillAttrs: Record<string, string> = {};
+  for (const k of ['form', 'surface_style', 'suitable_for_location', 'product_dimensions', 'package_included'] as const) {
+    const v = (fill as Record<string, unknown>)[k];
+    if (v) fillAttrs[k] = String(v);
+  }
+  for (const k of ['extendable', 'foldable'] as const) {
+    const v = (fill as Record<string, unknown>)[k];
+    if (typeof v === 'boolean') fillAttrs[k] = v ? 'true' : 'false';
+  }
+
+  const title = String(fill.title || p.name || '');
+  const form = {
+    sku: String(p.sku || productId),
+    ean: String(p.ean || ''),
+    categoryCode: cat.categoryCode || cat.categoryId || '',
+    categoryLabel: cat.categoryLabel || '',
+    title,
+    description: String(fill.description || p.description || ''),
+    short_description: String((fill as { short_description?: string }).short_description || ''),
+    images: gallery,
+    attributes: fillAttrs,
+    quantity: Number(p.qty ?? 1) || 1,
+    condition: 'NEW',
+    handling_time: Number((fill as { handling_time?: number }).handling_time ?? 1) || 1,
+    price: Number(p.price_gross ?? p.finalprice ?? 0),
+  };
+
   const draft = await api<{ id: number }>(`/api/offers`, {
     method: 'POST',
     body: JSON.stringify({
       typesense_id: productId, typesense_collection: item.collection, marketplace: 'kaufland',
-      form_data: form, title, description: fill.description || (form as { description?: string }).description || '',
-      price: (form as { price?: number }).price ?? null, category_id: cat.categoryCode || cat.categoryId || null,
+      form_data: form, title, description: form.description,
+      price: form.price, quantity: form.quantity, category_id: form.categoryCode || null,
     }),
   });
   return { draftId: draft.id, title };
