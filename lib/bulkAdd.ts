@@ -75,7 +75,13 @@ async function api<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text();
   let data: unknown = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
-  if (!res.ok) throw new Error((data as { error?: string })?.error || `HTTP ${res.status} ${path}`);
+  if (!res.ok) {
+    // Trasy zwracają powód w `details`, a samo `error` to etykieta w rodzaju „fill failed" —
+    // bez tego w kolejce lądował komunikat, z którego nie da się niczego wywnioskować.
+    const err = data as { error?: string; details?: string } | null;
+    const label = err?.error || `HTTP ${res.status} ${path}`;
+    throw new Error(err?.details ? `${label}: ${err.details}` : label);
+  }
   return data as T;
 }
 

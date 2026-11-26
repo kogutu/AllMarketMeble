@@ -138,18 +138,47 @@ export async function fillMiraklAttributes(
   // Lokalne dopasowania (hints) i tak wymuszają kluczowe wartości (kolor/materiał), więc do promptu
   // wysyłamy mniejszą próbkę: zawsze wpis dopasowany + do DICT_LIMIT pozostałych.
   const DICT_LIMIT = 40;
-  const sampleValues = (a: MarketplaceAttribute): string => {
+  const sampleValues = (a: MarketplaceAttribute, limit: number): string => {
     if (!a.values?.length) return '';
     const hinted = new Set(hints[a.code] || []);
     const ordered = [
       ...a.values.filter((v) => hinted.has(v.code)),
       ...a.values.filter((v) => !hinted.has(v.code)),
-    ].slice(0, DICT_LIMIT);
+    ].slice(0, limit);
     return `\n     Dozwolone wartości (code="label"): ${ordered.map((v) => `${v.code}="${v.label}"`).join(', ')}${a.values.length > ordered.length ? ` … (${a.values.length})` : ''}`;
   };
-  const attrList = attributes
-    .map((a) => `  - code="${a.code}" label="${a.label}" type=${a.type}${a.required ? ' [WYMAGANY]' : ''}${a.multiple ? ' [MULTI]' : ''}${sampleValues(a)}`)
-    .join('\n');
+  const renderAttr = (a: MarketplaceAttribute, limit: number): string =>
+    `  - code="${a.code}" label="${a.label}" type=${a.type}${a.required ? ' [WYMAGANY]' : ''}${a.multiple ? ' [MULTI]' : ''}${sampleValues(a, limit)}`;
+
+  // Budżet znaków na listę atrybutów. Szerokie gałęzie Empiku mają ich kilkaset (kategoria
+  // „Meble" = 462), a pełna lista z wartościami rozrasta się do ~350 tys. znaków — więcej, niż
+  // mieści okno kontekstowe modelu (polski tokenizuje się gorzej od angielskiego). Bez limitu
+  // żądanie wracało jako 400 „input exceeds the context window", a w kolejce masowego dodawania
+  // widniało samo „fill failed". Wymagane atrybuty mają pierwszeństwo przed opcjonalnymi.
+  const PROMPT_BUDGET = 60_000;
+  const byPriority = [...attributes].sort(
+    (a, b) => Number(Boolean(b.required)) - Number(Boolean(a.required)),
+  );
+  const lines: string[] = [];
+  let used = 0;
+  let skipped = 0;
+  for (const a of byPriority) {
+    let line = renderAttr(a, a.required ? DICT_LIMIT : 12);
+    if (used + line.length > PROMPT_BUDGET) {
+      // Wymaganego nie wolno pominąć — przycinamy mu listę wartości, zamiast go wyrzucać.
+      if (!a.required) {
+        skipped++;
+        continue;
+      }
+      line = renderAttr(a, 5);
+      if (used + line.length > PROMPT_BUDGET) line = renderAttr(a, 0);
+    }
+    lines.push(line);
+    used += line.length;
+  }
+  const attrList =
+    lines.join('\n') +
+    (skipped ? `\n  … pominięto ${skipped} atrybutów opcjonalnych (limit długości promptu)` : '');
 
   const hintsBlock = Object.keys(hints).length
     ? `\nWstępnie dopasowane wartości (użyj ich, o ile pasują): ${JSON.stringify(hints)}`
